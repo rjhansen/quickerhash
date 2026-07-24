@@ -1,3 +1,5 @@
+import java.io.ByteArrayOutputStream
+
 plugins {
     id("java")
     id("org.beryx.jlink") version "4.1.0"
@@ -69,6 +71,7 @@ when {
         tasks.register<Exec>("signDmg") {
             group = "distribution"
             description = "Codesigns the disk image"
+            mustRunAfter("jpackageImage", "jpackage")
 
             val dmgFile = layout.buildDirectory.file("jpackage/QuickerHash-$version.dmg")
             inputs.file(dmgFile)
@@ -87,8 +90,85 @@ when {
             )
         }
 
+        tasks.register<Exec>("notarizeDmg") {
+            group = "distribution"
+            description = "Submits the signed dmg to Apple's notary service and waits for approval"
+            dependsOn("signDmg")
+
+            val dmgFile = layout.buildDirectory.file("jpackage/QuickerHash-$version.dmg")
+            inputs.file(dmgFile)
+
+            // Submission doesn't modify the file, but it's a network call with side
+            // effects on Apple's servers, not a deterministic local build step —
+            // exclude it from up-to-date tracking so it always actually runs.
+            doNotTrackState("Submits to Apple's notary service; not a reproducible local build step")
+
+            commandLine(
+                "xcrun", "notarytool", "submit",
+                dmgFile.get().asFile.absolutePath,
+                "--keychain-profile", "QuickerHash-Notary",
+                "--wait"
+            )
+        }
+
+        tasks.register<Exec>("stapleDmg") {
+            group = "distribution"
+            description = "Staples the notarization ticket to the dmg"
+            dependsOn("notarizeDmg")
+
+            val dmgFile = layout.buildDirectory.file("jpackage/QuickerHash-$version.dmg")
+            inputs.file(dmgFile)
+
+            // Mutates the dmg in place (embeds the ticket) rather than producing
+            // a new file — same reasoning as signDmg above.
+            doNotTrackState("Staples the notarization ticket onto the dmg produced by :jpackage in place")
+
+            commandLine(
+                "xcrun", "stapler", "staple",
+                dmgFile.get().asFile.absolutePath
+            )
+        }
+
+        tasks.register<Exec>("verifyDmg") {
+            group = "verification"
+            description = "Confirms Gatekeeper accepts the dmg as signed and notarized"
+            dependsOn("stapleDmg")
+            mustRunAfter("jpackageImage", "jpackage")
+
+            val dmgFile = layout.buildDirectory.file("jpackage/QuickerHash-$version.dmg")
+            inputs.file(dmgFile)
+
+            doNotTrackState("Runs a read-only Gatekeeper check against the dmg produced by :jpackage")
+
+            val output = ByteArrayOutputStream()
+            standardOutput = output
+            errorOutput = output
+            isIgnoreExitValue = true
+
+            commandLine(
+                "spctl", "-a", "-vvv", "-t", "open",
+                "--context", "context:primary-signature",
+                dmgFile.get().asFile.absolutePath
+            )
+
+            doLast {
+                val result = output.toString()
+                println(result)
+
+                if (executionResult.get().exitValue != 0) {
+                    throw GradleException("Gatekeeper rejected the dmg:\n$result")
+                }
+                if (!result.contains("source=Notarized Developer ID")) {
+                    throw GradleException(
+                        "dmg passed Gatekeeper but was not reported as notarized " +
+                                "(missing 'source=Notarized Developer ID'):\n$result"
+                    )
+                }
+            }
+        }
+
         tasks.named("jpackage") {
-            finalizedBy("signDmg")
+            finalizedBy("verifyDmg")
         }
     }
     osName.contains("linux") -> {
