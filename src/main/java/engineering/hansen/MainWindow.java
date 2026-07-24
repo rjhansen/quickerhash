@@ -392,7 +392,7 @@ public class MainWindow extends JFrame {
                                 "This is Free Software: you may use it, share it, and change it\n" +
                                 "under terms of the Apache 2.0 License.",
                         "About QuickerHash",
-                        JOptionPane.INFORMATION_MESSAGE)
+                        JOptionPane.INFORMATION_MESSAGE);
             });
         }
 
