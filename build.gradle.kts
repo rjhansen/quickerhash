@@ -4,7 +4,7 @@ plugins {
 }
 
 group = "engineering.hansen"
-version = "1.0.0"
+version = "0.9"
 val osName = System.getProperty("os.name").lowercase()
 
 application {
@@ -29,7 +29,7 @@ java {
 when {
     osName.contains("mac") -> {
         jlink {
-            options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
+            options.set(listOf("--strip-debug", "--compress", "zip-6", "--no-header-files", "--no-man-pages"))
 
             launcher {
                 name = "QuickerHash"
@@ -93,7 +93,7 @@ when {
     }
     osName.contains("linux") -> {
         jlink {
-            options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
+            options.set(listOf("--strip-debug", "--compress", "zip-6", "--no-header-files", "--no-man-pages"))
 
             launcher {
                 name = "QuickerHash"
@@ -108,8 +108,6 @@ when {
 
                 imageOptions = listOf(
                     "--vendor", "Robert Hansen",
-                    "--linux-package-name", "quickerhash",
-                    "--linux-shortcut"
                 )
                 installerOptions = listOf(
                     "--vendor", "Robert Hansen",
@@ -155,7 +153,7 @@ when {
     }
     osName.contains("win") -> {
         jlink {
-            options.set(listOf("--strip-debug", "--compress", "2", "--no-header-files", "--no-man-pages"))
+            options.set(listOf("--strip-debug", "--compress", "zip-6", "--no-header-files", "--no-man-pages"))
 
             launcher {
                 name = "QuickerHash"
