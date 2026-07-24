@@ -40,7 +40,7 @@ class Hasher implements Runnable {
     @Override
     public void run() {
         FileInputStream fh = null;
-        int totalBytesRead = 0;
+        long totalBytesRead = 0;
         digest.reset();
 
         try {
@@ -63,7 +63,7 @@ class Hasher implements Runnable {
             }
         } catch (Exception e) {
             SwingUtilities.invokeLater(() ->
-                    JOptionPane.showInternalMessageDialog(mw,
+                    JOptionPane.showMessageDialog(mw,
                             "An error occurred while reading the file:\n\n" + e.getMessage(),
                             "I’m sorry…",
                             JOptionPane.ERROR_MESSAGE));
@@ -79,6 +79,7 @@ class Hasher implements Runnable {
                 mw.hashControl.setText("Start");
                 mw.hashControl.setEnabled(true);
                 mw.fileBox.setEnabled(true);
+                mw.tabPane.setEnabled(true);
             });
             mw.setIsHashing(false);
         }
@@ -94,6 +95,7 @@ public class MainWindow extends JFrame {
     final JProgressBar progressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
     final JComboBox<String> hashBox;
     final JComboBox<String> fileBox;
+    final JTabbedPane tabPane = new JTabbedPane();
     private boolean isHashing = false;
 
     String formatHash(byte[] bytes) {
@@ -184,6 +186,7 @@ public class MainWindow extends JFrame {
         hashControl.addActionListener(_ -> {
             if (Objects.equals(hashControl.getText(), "Start")) {
                 hashControl.setText("Cancel");
+                tabPane.setEnabled(false);
                 fileBox.setEnabled(false);
                 setIsHashing(true);
                 progressBar.setValue(0);
@@ -191,8 +194,9 @@ public class MainWindow extends JFrame {
                 new Thread(new Hasher(this)).start();
 
             } else { // we're stopping
-                hashControl.setText("Start");
+                tabPane.setEnabled(true);
                 fileBox.setEnabled(true);
+                hashControl.setText("Start");
                 setIsHashing(false);
                 progressBar.setValue(0);
             }
@@ -328,7 +332,7 @@ public class MainWindow extends JFrame {
     }
 
     void showAbout() {
-        JOptionPane.showInternalMessageDialog(null,
+        JOptionPane.showMessageDialog(this,
                 """
                         QuickerHash 0.9 is a simple, effective tool for computing hashes.
                         
@@ -371,12 +375,12 @@ public class MainWindow extends JFrame {
             try {
                 Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/releases"));
             } catch (IOException e) {
-                JOptionPane.showInternalMessageDialog(null,
+                JOptionPane.showMessageDialog(this,
                         "I/O error: " + e.getMessage(),
                         "I/O error",
                         JOptionPane.ERROR_MESSAGE);
             } catch (URISyntaxException _) {
-                JOptionPane.showInternalMessageDialog(null,
+                JOptionPane.showMessageDialog(this,
                         "Malformed URI: this is a weird bug",
                         "Malformed URI",
                         JOptionPane.ERROR_MESSAGE);
@@ -387,20 +391,22 @@ public class MainWindow extends JFrame {
             try {
                 Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/issues"));
             } catch (IOException e) {
-                JOptionPane.showInternalMessageDialog(null,
+                JOptionPane.showMessageDialog(this,
                         "I/O error: " + e.getMessage(),
                         "I/O error",
                         JOptionPane.ERROR_MESSAGE);
             } catch (URISyntaxException e) {
-                JOptionPane.showInternalMessageDialog(null,
+                JOptionPane.showMessageDialog(this,
                         "Malformed URI: this is a weird bug",
                         "Malformed URI",
                         JOptionPane.ERROR_MESSAGE);
             }
         });
-        Desktop desktop = Desktop.getDesktop();
-        if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
-            desktop.setAboutHandler( _ -> showAbout());
+        if (Desktop.isDesktopSupported()) {
+            Desktop desktop = Desktop.getDesktop();
+            if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
+                desktop.setAboutHandler(_ -> showAbout());
+            }
         }
 
         mb.add(file);
@@ -418,7 +424,6 @@ public class MainWindow extends JFrame {
         populateEngine();
         hashBox = makeHashBox();
         fileBox = makeFileBox();
-        var tabPane = new JTabbedPane();
         tabPane.addTab("Text", makeTextTab());
         tabPane.addTab("File", makeFileTab());
         getContentPane().add(tabPane, BorderLayout.CENTER);
