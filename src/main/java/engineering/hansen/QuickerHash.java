@@ -31,7 +31,7 @@ public class QuickerHash {
                 mw.getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);
 
             mw.setLocationRelativeTo(null);
-            mw.setSize(1000, 300);
+            mw.setSize(600, 300);
             mw.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             mw.setVisible(true);
         });
