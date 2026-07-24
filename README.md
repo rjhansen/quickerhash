@@ -27,7 +27,7 @@ exactly easy to use itself: the user interface is pretty clunky.
 We can do better.
 
 So, with a respectful nod of the head to Ted Smith and thanks for
-his work, here’s QuickerHasher.
+his work, here’s QuickerHash.
 
 Features:
 
