@@ -1,3 +1,8 @@
+/* This file is (c) 2026, Robert J. Hansen <rjh@sixdemonbag.org>.
+ *
+ * This is Free Software, released under the Apache 2.0 license.
+ */
+
 package engineering.hansen;
 
 import com.formdev.flatlaf.FlatLightLaf;
@@ -9,6 +14,7 @@ import java.awt.*;
 
 public class Main {
     static void main() {
+        SwingUtilities.invokeLater(() -> {
         try {
             if (SystemInfo.isMacOS) {
                 System.setProperty( "apple.laf.useScreenMenuBar", "true" );
@@ -20,10 +26,14 @@ public class Main {
                 UIManager.setLookAndFeel(new FlatLightLaf());
             }
         } catch (Exception ex) {
-            System.err.println( "Failed to initialize LaF" );
+            System.err.println("Failed to initialize LaF");
         }
         var mw = new MainWindow();
         if (SystemInfo.isMacFullWindowContentSupported)
             mw.getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);
+        mw.setSize(1000, 300);
+        mw.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        mw.setVisible(true);
+        });
     }
 }

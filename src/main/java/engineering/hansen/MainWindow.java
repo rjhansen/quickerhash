@@ -1,7 +1,11 @@
+/* This file is (c) 2026, Robert J. Hansen <rjh@sixdemonbag.org>.
+ *
+ * This is Free Software, released under the Apache 2.0 license.
+ */
+
 package engineering.hansen;
 
 import com.formdev.flatlaf.util.SystemFileChooser;
-
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -53,10 +57,7 @@ class Hasher implements Runnable {
             }
 
             if (mw.getIsHashing()) { // we ended normally at EOF
-                var hex = HexFormat.of().formatHex(digest.digest());
-                SwingUtilities.invokeLater(() -> {
-                    mw.fileHash.setText(hex);
-                });
+                SwingUtilities.invokeLater(() -> mw.fileHash.setText(mw.formatHash(digest.digest())));
             } else {
                 SwingUtilities.invokeLater(() -> mw.fileHash.setText(""));
             }
@@ -85,19 +86,27 @@ class Hasher implements Runnable {
 }
 
 public class MainWindow extends JFrame {
-    private final JTextArea textArea = new JTextArea();
-    private final JTextField textHash = new JTextField();
+    final JTextArea textArea = new JTextArea();
+    final JTextField textHash = new JTextField();
     final JTextField fileHash = new JTextField();
     final ArrayList<MessageDigest> engines = new ArrayList<>();
     final JButton hashControl = new JButton("Start");
-    private final JProgressBar progressBar = new JProgressBar(
-            JProgressBar.HORIZONTAL, 0, 100
-    );
+    final JProgressBar progressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
     final JComboBox<String> hashBox;
     final JComboBox<String> fileBox;
     private boolean isHashing = false;
 
-    public synchronized boolean getIsHashing() {
+    String formatHash(byte[] bytes) {
+        var hex = HexFormat.of().formatHex(bytes);
+        var withSpaces = new StringBuilder();
+        for (int i = 0 ; i < hex.length() ; i++) {
+            withSpaces.append(hex.charAt(i));
+            if ((i > 0) && (i % 8 == 0)) withSpaces.append(' ');
+        }
+        return withSpaces.toString();
+    }
+
+    synchronized boolean getIsHashing() {
         return isHashing;
     }
 
@@ -119,10 +128,13 @@ public class MainWindow extends JFrame {
     }
 
     private JPanel makeFileTab() {
-        fileHash.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        fileHash.setFont(new Font("Monospaced", Font.BOLD, 12));
         fileHash.setEditable(false);
         fileHash.setText("");
-        fileHash.setBorder(BorderFactory.createTitledBorder(fileHash.getBorder(), "Hash value"));
+        var jsp = new JScrollPane(fileHash);
+        jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+        jsp.setBorder(BorderFactory.createTitledBorder(textHash.getBorder(), "Hash value"));
 
         var fileTab = new JPanel();
         fileTab.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
@@ -135,8 +147,6 @@ public class MainWindow extends JFrame {
         gbc.gridx = 0;
         gbc.gridy = 0;
         topPanel.add(label, gbc);
-
-        var _this = this;
 
         gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
@@ -168,7 +178,7 @@ public class MainWindow extends JFrame {
         q.add(new JLabel("Progress: "), BorderLayout.WEST);
         q.add(progressBar, BorderLayout.CENTER);
         p.add(q, BorderLayout.NORTH);
-        p.add(fileHash, BorderLayout.SOUTH);
+        p.add(jsp, BorderLayout.SOUTH);
         fileTab.add(p, BorderLayout.CENTER);
 
         hashControl.addActionListener(_ -> {
@@ -178,7 +188,7 @@ public class MainWindow extends JFrame {
                 setIsHashing(true);
                 progressBar.setValue(0);
 
-                new Thread(new Hasher(_this)).start();
+                new Thread(new Hasher(this)).start();
 
             } else { // we're stopping
                 hashControl.setText("Start");
@@ -205,15 +215,15 @@ public class MainWindow extends JFrame {
             var md = engines.get(textHashBox.getSelectedIndex());
             md.reset();
             var hash = md.digest(textArea.getText().getBytes(StandardCharsets.UTF_8));
-            textHash.setText(HexFormat.of().formatHex(hash));
+            textHash.setText(formatHash(hash));
         });
-        textHash.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        textHash.setFont(new Font("Monospaced", Font.BOLD, 12));
         textHash.setEditable(false);
         textHash.setText("");
         var md = engines.get(textHashBox.getSelectedIndex());
         md.reset();
         var hash = md.digest(textArea.getText().getBytes(StandardCharsets.UTF_8));
-        textHash.setText(HexFormat.of().formatHex(hash));
+        textHash.setText(formatHash(hash));
 
         var textTab = new JPanel();
         textTab.setLayout(new GridBagLayout());
@@ -264,7 +274,7 @@ public class MainWindow extends JFrame {
                 var md = engines.get(textHashBox.getSelectedIndex());
                 md.reset();
                 var hash = md.digest(textArea.getText().getBytes(StandardCharsets.UTF_8));
-                textHash.setText(HexFormat.of().formatHex(hash));
+                textHash.setText(formatHash((hash)));
             }
         });
 
@@ -317,6 +327,19 @@ public class MainWindow extends JFrame {
         return fileBox;
     }
 
+    void showAbout() {
+        JOptionPane.showInternalMessageDialog(null,
+                """
+                        QuickerHash 0.9 is a simple, effective tool for computing hashes.
+                        
+                        Copyright ©️ 2026, Robert J. Hansen <rob@hansen.engineering>.
+                        
+                        This is Free Software: you may use it, share it, and change it
+                        under terms of the Apache 2.0 License.""",
+                "About QuickerHash",
+                JOptionPane.INFORMATION_MESSAGE);
+    }
+
     void populateEngine() {
         for (String algoName: new String[]{
                 "MD2", "MD5", "SHA-1", "SHA-224", "SHA-256", "SHA-384", "SHA-512",
@@ -333,7 +356,6 @@ public class MainWindow extends JFrame {
     }
 
     JMenuBar makeMenuBar() {
-        var _this = this;
         var mb = new JMenuBar();
         var file = new JMenu("File");
         var help = new JMenu("Help");
@@ -342,26 +364,19 @@ public class MainWindow extends JFrame {
         var helpLatest = new JMenuItem("Get the latest release");
         var helpReport = new JMenuItem("Report a Bug");
 
-        fileQuit.addActionListener(_ -> _this.dispose());
-        helpAbout.addActionListener(_ ->
-                JOptionPane.showInternalMessageDialog(_this,
-                        "QuickerHash is a simple, effective tool for computing hashes.\n\n" +
-                                "Copyright ©️ 2026, Robert J. Hansen <rob@hansen.engineering>.\n\n" +
-                                "This is Free Software: you may use it, share it, and change it\n" +
-                                "under terms of the Apache 2.0 License.",
-        "About QuickerHash",
-        JOptionPane.INFORMATION_MESSAGE));
+        fileQuit.addActionListener(_ -> dispose());
+        helpAbout.addActionListener(_ -> showAbout());
 
         helpLatest.addActionListener(_ -> {
             try {
                 Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/releases"));
             } catch (IOException e) {
-                JOptionPane.showInternalMessageDialog(_this,
+                JOptionPane.showInternalMessageDialog(null,
                         "I/O error: " + e.getMessage(),
                         "I/O error",
                         JOptionPane.ERROR_MESSAGE);
-            } catch (URISyntaxException e) {
-                JOptionPane.showInternalMessageDialog(_this,
+            } catch (URISyntaxException _) {
+                JOptionPane.showInternalMessageDialog(null,
                         "Malformed URI: this is a weird bug",
                         "Malformed URI",
                         JOptionPane.ERROR_MESSAGE);
@@ -372,34 +387,27 @@ public class MainWindow extends JFrame {
             try {
                 Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/issues"));
             } catch (IOException e) {
-                JOptionPane.showInternalMessageDialog(_this,
+                JOptionPane.showInternalMessageDialog(null,
                         "I/O error: " + e.getMessage(),
                         "I/O error",
                         JOptionPane.ERROR_MESSAGE);
             } catch (URISyntaxException e) {
-                JOptionPane.showInternalMessageDialog(_this,
+                JOptionPane.showInternalMessageDialog(null,
                         "Malformed URI: this is a weird bug",
                         "Malformed URI",
                         JOptionPane.ERROR_MESSAGE);
             }
         });
         Desktop desktop = Desktop.getDesktop();
-        if( desktop.isSupported( Desktop.Action.APP_ABOUT ) ) {
-            desktop.setAboutHandler( e -> {
-                JOptionPane.showInternalMessageDialog(_this,
-                        "QuickerHash is a simple, effective tool for computing hashes.\n\n" +
-                                "Copyright ©️ 2026, Robert J. Hansen <rob@hansen.engineering>.\n\n" +
-                                "This is Free Software: you may use it, share it, and change it\n" +
-                                "under terms of the Apache 2.0 License.",
-                        "About QuickerHash",
-                        JOptionPane.INFORMATION_MESSAGE);
-            });
+        if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
+            desktop.setAboutHandler( _ -> showAbout());
         }
 
         mb.add(file);
         mb.add(help);
         file.add(fileQuit);
         help.add(helpAbout);
+        help.add(helpLatest);
         help.add(helpReport);
         return mb;
     }
@@ -413,10 +421,6 @@ public class MainWindow extends JFrame {
         var tabPane = new JTabbedPane();
         tabPane.addTab("Text", makeTextTab());
         tabPane.addTab("File", makeFileTab());
-
         getContentPane().add(tabPane, BorderLayout.CENTER);
-        setSize(400, 300);
-        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        setVisible(true);
     }
 }
