@@ -102,8 +102,8 @@ public class MainWindow extends JFrame {
         var hex = HexFormat.of().formatHex(bytes);
         var withSpaces = new StringBuilder();
         for (int i = 0 ; i < hex.length() ; i++) {
+            if ((i > 0) && (0 == i % 8)) withSpaces.append(' ');
             withSpaces.append(hex.charAt(i));
-            if ((i > 0) && (i % 8 == 0)) withSpaces.append(' ');
         }
         return withSpaces.toString();
     }
