@@ -10,9 +10,8 @@ import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.formdev.flatlaf.util.SystemInfo;
 
 import javax.swing.*;
-import java.awt.*;
 
-public class Main {
+public class QuickerHash {
     static void main() {
         SwingUtilities.invokeLater(() -> {
             try {

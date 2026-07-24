@@ -10,8 +10,8 @@ version = "1.0"
 val osName = System.getProperty("os.name").lowercase()
 
 application {
-    mainModule.set("QuickerHash.main")     // your module-info.java module name
-    mainClass.set("engineering.hansen.Main")
+    mainModule.set("QuickerHash")     // your module-info.java module name
+    mainClass.set("engineering.hansen.QuickerHash")
 }
 
 repositories {
