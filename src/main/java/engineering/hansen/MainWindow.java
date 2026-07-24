@@ -76,6 +76,8 @@ class Hasher implements Runnable {
             }
             SwingUtilities.invokeLater(() -> {
                 mw.updateProgressBar(0);
+                mw.hashBox.setEnabled(true);
+                mw.progressBar.setString("Choose a file and algorithm, then click ‘Start’");
                 mw.hashControl.setText("Start");
                 mw.hashControl.setEnabled(true);
                 mw.fileBox.setEnabled(true);
@@ -186,28 +188,34 @@ public class MainWindow extends JFrame {
         hashControl.addActionListener(_ -> {
             if (Objects.equals(hashControl.getText(), "Start")) {
                 hashControl.setText("Cancel");
+                fileHash.setText("Calculating hash...");
                 tabPane.setEnabled(false);
                 fileBox.setEnabled(false);
+                hashBox.setEnabled(false);
                 setIsHashing(true);
-                progressBar.setValue(0);
-
+                updateProgressBar(0);
                 new Thread(new Hasher(this)).start();
 
             } else { // we're stopping
                 tabPane.setEnabled(true);
                 fileBox.setEnabled(true);
+                fileHash.setText("");
                 hashControl.setText("Start");
+                hashBox.setEnabled(true);
                 setIsHashing(false);
-                progressBar.setValue(0);
+                updateProgressBar(0);
+                progressBar.setString("Choose a file and algorithm, then click ‘Start’");
             }
         });
-
 
         return fileTab;
     }
 
     void updateProgressBar(int val) {
-        SwingUtilities.invokeLater(() -> progressBar.setValue(val));
+        SwingUtilities.invokeLater(() -> {
+            progressBar.setValue(val);
+            progressBar.setString((val == 0) ? "Choose a file and algorithm, then click ‘Start’" : (val + " %"));
+        });
     }
 
     private JPanel makeTextTab() {
@@ -422,6 +430,8 @@ public class MainWindow extends JFrame {
         super("QuickerHash");
         setJMenuBar(makeMenuBar());
         populateEngine();
+        progressBar.setStringPainted(true);
+        progressBar.setString("Choose a file and algorithm, then click ‘Start’");
         hashBox = makeHashBox();
         fileBox = makeFileBox();
         tabPane.addTab("Text", makeTextTab());
