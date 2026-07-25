@@ -84,4 +84,6 @@ This will allow you to ensure the integrity of your download.
 
 ### Windows
 
-Unfortunately, I don't have the 
+Unfortunately, I don't have the disposable income to afford a Windows
+code signing certificate — sorry. You can, however, check the detached GnuPG
+signature for the package.
