@@ -5,6 +5,7 @@
 
 package engineering.hansen;
 
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.util.SystemFileChooser;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
@@ -12,6 +13,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import java.awt.*;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -99,6 +102,8 @@ public class MainWindow extends JFrame {
     final JComboBox<String> fileBox;
     final JTabbedPane tabPane = new JTabbedPane();
     private boolean isHashing = false;
+    private boolean textEntered = false;
+    private Color originalColor;
 
     String formatHash(byte[] bytes) {
         var hex = HexFormat.of().formatHex(bytes);
@@ -123,7 +128,20 @@ public class MainWindow extends JFrame {
         textArea.setEditable(true);
         textArea.setEnabled(true);
         textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
-        textArea.setText("Enter your text here");
+        originalColor = textArea.getForeground();
+        textArea.setForeground(Color.GRAY);
+        textArea.setText("Anything you type here will be hashed.");
+        textArea.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                if (! textEntered) {
+                    textArea.setForeground(originalColor);
+                    textArea.setText("");
+                    textEntered = true;
+                }
+            }
+        });
+
         var foo = new JScrollPane(textArea);
         foo.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
         foo.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
@@ -372,9 +390,13 @@ public class MainWindow extends JFrame {
         var file = new JMenu("File");
         var help = new JMenu("Help");
         var fileQuit = new JMenuItem("Quit");
+        fileQuit.setIcon(new FlatSVGIcon(getClass().getResource("/icons/quit.svg")).derive(16, 16));
         var helpAbout = new JMenuItem("About");
+        helpAbout.setIcon(new FlatSVGIcon(getClass().getResource("/icons/about.svg")).derive(16, 16));
         var helpLatest = new JMenuItem("Get the latest release");
+        helpLatest.setIcon(new FlatSVGIcon(getClass().getResource("/icons/download.svg")).derive(16, 16));
         var helpReport = new JMenuItem("Report a Bug");
+        helpReport.setIcon(new FlatSVGIcon(getClass().getResource("/icons/bug.svg")).derive(16, 16));
 
         fileQuit.addActionListener(_ -> dispose());
         helpAbout.addActionListener(_ -> showAbout());

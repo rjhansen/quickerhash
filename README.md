@@ -1,9 +1,8 @@
 # QuickerHash
 
------
-
 [![forthebadge](https://ForTheBadge.com/images/badges/made-with-java.svg)](https://forthebadge.com)
 
+## Why make it?
 A friend of mine teaches digital security to journalists, human rights
 workers, and other such people who really need to be aware of digital 
 security.
@@ -29,11 +28,13 @@ We can do better.
 So, with a respectful nod of the head to Ted Smith and thanks for
 his work, here’s QuickerHash.
 
-Features:
+## Features
 
+* Crossplatform (tested on macOS, Windows, and Fedora Linux)
+* Prebuilt binaries (macOS/Apple Silicon, Windows/x86_64, Linux x86_64)
+* macOS binaries are properly signed and notarized by Apple
 * 100% libre software (Apache 2.0 licensed)
-* Crossplatform: runs on Linux, Windows, and macOS.
-* Supports:
+* Supports
     * MD2
     * MD5
     * SHA-1
@@ -54,10 +55,33 @@ Features:
 * Written in 100% Java. I’d prefer writing it in Rust, myself, but
   there are a lot more Java hackers than Rust ones, and that’s good
   for its long-term viability.
-* I publish MacOS disk images and RHEL-compatible RPM packages that
-  are properly code signed for your safety.
 * Self-contained executable: you don't need a Java virtual machine,
   as the executables run in their own Java environment. (Yes, this
   _does_ make it a 32MiB download. It’s 2026; get over it.)
 * A user interface designed by someone who’s formally studied
   user interface design.
+
+## Using pre-built binaries
+
+### macOS
+
+Pre-built binaries exist for Macs running Apple Silicon. They're
+properly code signed and notarized by Apple. They install just like
+any other application contained in a disk image.
+
+### Linux
+
+The RPM I provide here is signed by my GnuPG certificate. I'd suggest:
+
+```bash
+$ gpg --keyserver hkps://keys.openpgp.org \
+    --recv-key CC11BE7CBBED77B120F37B011DCBDC01B44427C7
+$ gpg --armor --export CC11BE7CBBED77B120F37B011DCBDC01B44427C7 > key.asc
+$ sudo rpm --import key.asc 
+```
+
+This will allow you to ensure the integrity of your download.
+
+### Windows
+
+Unfortunately, I don't have the 

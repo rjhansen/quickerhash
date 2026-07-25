@@ -20,6 +20,8 @@ repositories {
 
 dependencies {
     implementation("com.formdev:flatlaf:3.7.2")
+    implementation("com.formdev:flatlaf-extras:3.7.2")
+    implementation("com.github.weisj:jsvg:2.1.0")
 }
 
 java {
@@ -46,6 +48,7 @@ when {
 
                 imageOptions = listOf(
                     "--vendor", "Robert Hansen",
+                    "--icon", "src/packaging/icons/QuickerHash.icns",
                     // Note: if you're not me, either (a) substitute your
                     // own credentials or (b) omit the code signing commands.
                     "--mac-sign",
@@ -55,6 +58,7 @@ when {
                 )
                 installerOptions = listOf(
                     "--vendor", "Robert Hansen",
+                    "--icon", "src/packaging/icons/QuickerHash.icns",
                     "--app-version", "$version",
                     // Note: if you're not me, either (a) substitute your
                     // own credentials or (b) omit the code signing commands.
@@ -188,6 +192,8 @@ when {
 
                 imageOptions = listOf(
                     "--vendor", "Robert Hansen",
+                    "--license-file", "LICENSE",
+                    "--icon", "src/packaging/icons/QuickerHash.png",
                 )
                 installerOptions = listOf(
                     "--vendor", "Robert Hansen",
@@ -195,6 +201,8 @@ when {
                     "--linux-package-name", "quickerhash",
                     "--linux-menu-group", "Utility",
                     "--linux-shortcut",
+                    "--linux-rpm-license-type", "ASL 2.0",
+                    "--about-url", "https://github.com/rjhansen/quickerhash"
 //                    "--linux-deb-maintainer", "rob@hansen.engineering" // required for .deb packages
                 )
             }
@@ -248,15 +256,19 @@ when {
 
                 imageOptions = listOf(
                     "--vendor", "Robert Hansen",
+                    "--license-file", "LICENSE.rtf",
+                    "--icon", "src/packaging/icons/QuickerHash.ico"
                 )
                 installerOptions = listOf(
                     "--vendor", "Robert Hansen",
                     "--app-version", "$version",
+                    "--about-url", "https://github.com/rjhansen/quickerhash",
                     "--win-menu",
                     "--win-menu-group", "QuickerHash",
                     "--win-shortcut",
                     "--win-dir-chooser",
-                    "--win-per-user-install"
+                    "--win-per-user-install",
+                    "--win-upgrade-uuid", "e4b1c2a0-9f3d-4c8e-8a2b-1d6f0c3e5a7b"
                 )
             }
         }
