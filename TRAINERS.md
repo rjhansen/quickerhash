@@ -42,3 +42,11 @@ If students have an exotic hash they need to use, just click "Hashes" and "Exoti
 QuickerHash uses the BouncyCastle cryptography library, and all of its sixty-two
 hashes.
 
+## The app is learned in order.
+
+In the very beginning, students learn about hashes by typing around in a text area
+and seeing the avalanche effect in action, how unpredictable hashes are, and so on.
+Then students move to the second tab, where they can start examining single files
+(like operating system updates). Once they understand that, the final tab gives
+them a recursive file hasher that can copy results to the clipboard in Excel's CSV
+format for inclusion in official reports.
