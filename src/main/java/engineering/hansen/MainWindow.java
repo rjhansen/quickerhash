@@ -26,186 +26,10 @@ import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.prefs.Preferences;
-import java.util.stream.Stream;
-
-class DirectoryHasher extends SwingWorker<Void, DirectoryHasher.Update> {
-    sealed interface Update permits Progress, Completed {}
-    record Progress(String path, int percent) implements Update {}
-    record Completed(String path, String hash) implements Update {}
-
-    private final MainWindow mw;
-    private MessageDigest digest;
-    private String absPath;
-
-    public DirectoryHasher(MainWindow thingy, String digestName, String startRecursionAt) {
-        mw = thingy;
-        try {
-            digest = MessageDigest.getInstance(digestName);
-            absPath = startRecursionAt;
-        } catch (NoSuchAlgorithmException e) {
-            SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(mw,
-                            "An error occurred while creating the hash engine:\n\n" + e.getMessage(),
-                            "I’m sorry…",
-                            JOptionPane.ERROR_MESSAGE));
-            digest = null;
-            absPath = null;
-        }
-    }
-
-    @Override
-    protected Void doInBackground() throws Exception {
-        if (digest == null || absPath == null) return null;
-
-        try (Stream<Path> stream = Files.walk(Path.of(absPath))) {
-            var it = stream.filter(Files::isRegularFile)
-                    .filter(Files::isReadable)
-                    .map(Path::toAbsolutePath)
-                    .map(Path::toString)
-                    .iterator();
-
-            while (!isCancelled() && it.hasNext()) {
-                String p = it.next();
-                digest.reset();
-                publish(new Progress(p, 0));
-
-                try (FileInputStream fh = new FileInputStream(p)) {
-                    var filesize = Files.size(Paths.get(p));
-                    long totalBytesRead = 0;
-                    var bytes = fh.readNBytes(1048576);
-
-                    while (!isCancelled() && bytes.length > 0) {
-                        digest.update(bytes);
-                        totalBytesRead += bytes.length;
-                        int fracDone = (int) (100.0 * ((float) totalBytesRead / (float) filesize));
-                        publish(new Progress(p, fracDone));
-                        bytes = fh.readNBytes(1048576);
-                    }
-
-                    if (!isCancelled()) {
-                        publish(new Completed(p, mw.formatHash(digest.digest())));
-                    }
-                } catch (IOException e) {
-                    // Skip this file but keep walking the rest of the directory,
-                    // rather than aborting the whole recursive hash.
-                    publish(new Completed(p, "ERROR: " + e.getMessage()));
-                }
-            }
-        }
-        return null;
-    }
-
-    @Override
-    protected void process(java.util.List<Update> chunks) {
-        for (var update : chunks) {
-            switch (update) {
-                case Progress prog -> {
-                    mw.getDirectoryProgressBar().setValue(prog.percent());
-                    mw.getDirectoryProgressBar().setString(prog.path());
-                }
-                case Completed done -> {
-                    mw.getDirectoryProgressBar().setValue(0);
-                    mw.getTableModel().addRow(new String[] { done.path(), done.hash() });
-                }
-            }
-        }
-    }
-
-    @Override
-    protected void done() {
-        mw.endRecursiveHashing();
-        if (!isCancelled()) {
-            try {
-                get(); // surfaces any exception thrown out of doInBackground()
-            } catch (Exception e) {
-                Throwable cause = e.getCause() != null ? e.getCause() : e;
-                JOptionPane.showMessageDialog(mw,
-                        "An error occurred while hashing the directory:\n\n" + cause.getMessage(),
-                        "I’m sorry…",
-                        JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
-}
-
-
-class Hasher extends SwingWorker<byte[], Integer> {
-    private final MainWindow mw;
-    private MessageDigest digest;
-    private String absPath;
-
-    public Hasher(MainWindow thingy, String digestName, String path) {
-        mw = thingy;
-        try {
-            digest = MessageDigest.getInstance(digestName);
-            absPath = path;
-        } catch (NoSuchAlgorithmException e) {
-            SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(mw,
-                            "An error occurred while creating the hash engine:\n\n" + e.getMessage(),
-                            "I’m sorry…",
-                            JOptionPane.ERROR_MESSAGE));
-            digest = null;
-            absPath = null;
-        }
-    }
-
-    @Override
-    protected byte[] doInBackground() throws Exception {
-        if (digest == null || absPath == null) return null;
-
-        digest.reset();
-        long totalBytesRead = 0;
-
-        try (var fh = new FileInputStream(absPath)) {
-            var filesize = Files.size(Paths.get(absPath));
-            var bytes = fh.readNBytes(1048576);
-
-            while (!isCancelled() && bytes.length > 0) {
-                digest.update(bytes);
-                totalBytesRead += bytes.length;
-                int fracDone = (int) (100.0 * ((float) totalBytesRead / (float) filesize));
-                publish(fracDone);
-                bytes = fh.readNBytes(1048576);
-            }
-        }
-
-        return isCancelled() ? null : digest.digest();
-    }
-
-    @Override
-    protected void process(java.util.List<Integer> chunks) {
-        mw.updateProgressBar(chunks.getLast());
-    }
-
-    @Override
-    protected void done() {
-        mw.endFileHashing();
-
-        if (isCancelled()) {
-            mw.setFileHash(false, null);
-            return;
-        }
-
-        try {
-            byte[] result = get();
-            mw.setFileHash(result != null, result);
-        } catch (Exception e) {
-            Throwable cause = e.getCause() != null ? e.getCause() : e;
-            JOptionPane.showMessageDialog(mw,
-                    "An error occurred while reading the file:\n\n" + cause.getMessage(),
-                    "I’m sorry…",
-                    JOptionPane.ERROR_MESSAGE);
-        }
-    }
-}
 
 public class MainWindow extends JFrame {
     final Preferences prefs = Preferences.userRoot().node(this.getClass().getName());
@@ -224,6 +48,20 @@ public class MainWindow extends JFrame {
     final JButton textHashCopy = new JButton("Copy");
     final JButton fileHashCopy = new JButton("Copy");
     final JButton directoryHashCopy = new JButton("Copy");
+    final JProgressBar progressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
+    final JProgressBar directoryProgressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
+    final JComboBox<String> fileHashBox = new JComboBox<>();
+    final JComboBox<String> textHashBox = new JComboBox<>();
+    final JComboBox<String> directoryHashBox = new JComboBox<>();
+    final JComboBox<String> fileBox = makeFileBox();
+    final JComboBox<String> directoryBox = makeDirectoryBox();
+    final JTabbedPane tabPane = new JTabbedPane();
+    final HashMap<String, HashSet<String>> hashCategories = new HashMap<>();
+    MessageDigest textDigest = null;
+    boolean textEntered = false;
+    Color originalColor;
+    FileHasher fileHasher;
+    DirectoryHasher directoryHasher;
     final DefaultTableModel model = new DefaultTableModel() {
         final String[] columnNames = {"Filename", "Hash"};
 
@@ -238,32 +76,18 @@ public class MainWindow extends JFrame {
         }
     };
     final JTable directoryHash = new JTable(model) {
+        @Serial
         private static final long serialVersionUID = 1L;
-
         public boolean isCellEditable(int row, int column) {
             return false;
-        };
+        }
     };
-    final JProgressBar progressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
-    final JProgressBar directoryProgressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
-    final JComboBox<String> fileHashBox = new JComboBox<>();
-    final JComboBox<String> textHashBox = new JComboBox<>();
-    final JComboBox<String> directoryHashBox = new JComboBox<>();
-    final JComboBox<String> fileBox = makeFileBox();
-    final JComboBox<String> directoryBox = makeDirectoryBox();
-    final JTabbedPane tabPane = new JTabbedPane();
-    final HashMap<String, HashSet<String>> hashCategories = new HashMap<>();
-    MessageDigest textDigest = null;
-    boolean textEntered = false;
-    Color originalColor;
-    Hasher hasher;
-    DirectoryHasher directoryHasher;
 
     DefaultTableModel getTableModel() {
         return model;
     }
 
-    private JComboBox<String> makeDirectoryBox () {
+    private JComboBox<String> makeDirectoryBox() {
         var model = new DefaultComboBoxModel<String>();
         var _this = this;
         var directoryBox = new JComboBox<>(model);
@@ -344,7 +168,7 @@ public class MainWindow extends JFrame {
     String formatHash(byte[] bytes) {
         var hex = HexFormat.of().formatHex(bytes);
         var withSpaces = new StringBuilder();
-        for (int i = 0 ; i < hex.length() ; i++) {
+        for (int i = 0; i < hex.length(); i++) {
             if ((i > 0) && (0 == i % 8)) withSpaces.append(' ');
             withSpaces.append(hex.charAt(i));
         }
@@ -362,7 +186,7 @@ public class MainWindow extends JFrame {
         textArea.addFocusListener(new FocusAdapter() {
             @Override
             public void focusGained(FocusEvent e) {
-                if (! textEntered) {
+                if (!textEntered) {
                     textArea.setForeground(originalColor);
                     textArea.setText("");
                     textEntered = true;
@@ -474,7 +298,7 @@ public class MainWindow extends JFrame {
             var sw = new StringWriter();
             try (CSVPrinter printer = new CSVPrinter(sw, CSVFormat.EXCEL)) {
                 printer.printRecord("Filename", "Hash");
-                for (int i = 0 ; i < directoryHash.getModel().getRowCount() ; i++) {
+                for (int i = 0; i < directoryHash.getModel().getRowCount(); i++) {
                     String fn = directoryHash.getModel().getValueAt(i, 0).toString();
                     String hv = directoryHash.getModel().getValueAt(i, 1).toString();
                     printer.printRecord(fn, hv);
@@ -577,14 +401,14 @@ public class MainWindow extends JFrame {
                 fileHashBox.setEnabled(false);
                 updateProgressBar(0);
 
-                hasher = new Hasher(this,
+                fileHasher = new FileHasher(this,
                         Objects.requireNonNull(fileHashBox.getSelectedItem()).toString(),
                         Objects.requireNonNull(fileBox.getSelectedItem()).toString());
-                hasher.execute();
+                fileHasher.execute();
 
             } else { // we're stopping
-                if (hasher != null) {
-                    hasher.cancel(true);
+                if (fileHasher != null) {
+                    fileHasher.cancel(true);
                 }
             }
         });
@@ -648,7 +472,7 @@ public class MainWindow extends JFrame {
                     JOptionPane.ERROR_MESSAGE);
             System.exit(0);
         }
-        var hash = textDigest.digest(new byte[] {});
+        var hash = textDigest.digest(new byte[]{});
         textHash.setText(formatHash(hash));
 
         var textTab = new JPanel();
@@ -739,60 +563,60 @@ public class MainWindow extends JFrame {
         return textTab;
     }
 
-        private JComboBox<String> makeFileBox () {
-            var model = new DefaultComboBoxModel<String>();
-            var _this = this;
-            var fileBox = new JComboBox<>(model);
-            fileBox.setFont(new Font("Monospaced", Font.PLAIN, 12));
-            fileBox.setEditable(false);
-            fileBox.addPopupMenuListener(new PopupMenuListener() {
-                @Override
-                public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
-                    SwingUtilities.invokeLater(() -> fileBox.setPopupVisible(false));
+    private JComboBox<String> makeFileBox() {
+        var model = new DefaultComboBoxModel<String>();
+        var _this = this;
+        var fileBox = new JComboBox<>(model);
+        fileBox.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        fileBox.setEditable(false);
+        fileBox.addPopupMenuListener(new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+                SwingUtilities.invokeLater(() -> fileBox.setPopupVisible(false));
 
-                    var fileChooser = new SystemFileChooser();
-                    fileChooser.setMultiSelectionEnabled(false);
-                    fileChooser.setFileSelectionMode(SystemFileChooser.FILES_ONLY);
-                    int result = fileChooser.showOpenDialog(_this);
+                var fileChooser = new SystemFileChooser();
+                fileChooser.setMultiSelectionEnabled(false);
+                fileChooser.setFileSelectionMode(SystemFileChooser.FILES_ONLY);
+                int result = fileChooser.showOpenDialog(_this);
 
-                    if (result == SystemFileChooser.APPROVE_OPTION) {
-                        hashControl.setEnabled(true);
-                        model.removeAllElements();
-                        File selectedFile = fileChooser.getSelectedFile();
-                        String path = selectedFile.getAbsolutePath();
-                        if (((DefaultComboBoxModel<String>) fileBox.getModel()).getIndexOf(path) == -1) {
-                            model.addElement(path);
-                        }
-                        fileBox.setSelectedItem(path);
-                    } else {
-                        model.removeAllElements();
-                        hashControl.setEnabled(false);
+                if (result == SystemFileChooser.APPROVE_OPTION) {
+                    hashControl.setEnabled(true);
+                    model.removeAllElements();
+                    File selectedFile = fileChooser.getSelectedFile();
+                    String path = selectedFile.getAbsolutePath();
+                    if (((DefaultComboBoxModel<String>) fileBox.getModel()).getIndexOf(path) == -1) {
+                        model.addElement(path);
                     }
+                    fileBox.setSelectedItem(path);
+                } else {
+                    model.removeAllElements();
+                    hashControl.setEnabled(false);
                 }
+            }
 
-                @Override
-                public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
-                }
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+            }
 
-                @Override
-                public void popupMenuCanceled(PopupMenuEvent e) {
-                }
-            });
-            return fileBox;
-        }
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent e) {
+            }
+        });
+        return fileBox;
+    }
 
-        void showAbout () {
-            JOptionPane.showMessageDialog(this,
-                    """
-                            QuickerHash 1.1 is a simple, effective tool for computing hashes.
-                            
-                            Copyright ©️ 2026, Robert J. Hansen <rob@hansen.engineering>.
-                            
-                            This is Free Software: you may use it, share it, and change it
-                            under terms of the Apache 2.0 License.""",
-                    "About QuickerHash",
-                    JOptionPane.INFORMATION_MESSAGE);
-        }
+    void showAbout() {
+        JOptionPane.showMessageDialog(this,
+                """
+                        QuickerHash 1.1 is a simple, effective tool for computing hashes.
+                        
+                        Copyright ©️ 2026, Robert J. Hansen <rob@hansen.engineering>.
+                        
+                        This is Free Software: you may use it, share it, and change it
+                        under terms of the Apache 2.0 License.""",
+                "About QuickerHash",
+                JOptionPane.INFORMATION_MESSAGE);
+    }
 
     void populateHashBoxes() {
         textHashBox.removeAllItems();
@@ -834,7 +658,7 @@ public class MainWindow extends JFrame {
 
         String[] enArr = enabled.toArray(new String[]{});
         Arrays.sort(enArr);
-        for (var s: enArr) {
+        for (var s : enArr) {
             textHashBox.addItem(s);
             fileHashBox.addItem(s);
             directoryHashBox.addItem(s);
@@ -849,144 +673,146 @@ public class MainWindow extends JFrame {
         dtm.setRowCount(0);
     }
 
-        JMenuBar makeMenuBar () {
-            var mb = new JMenuBar();
-            var file = new JMenu("File");
-            var hashes = new JMenu("Hashes");
-            var help = new JMenu("Help");
-            var fileQuit = new JMenuItem("Quit");
-            fileQuit.setToolTipText("Quit QuickerHash");
-            fileQuit.setIcon(new FlatSVGIcon(getClass().getResource("/icons/quit.svg")).derive(16, 16));
+    JMenuBar makeMenuBar() {
+        var mb = new JMenuBar();
+        var file = new JMenu("File");
+        var hashes = new JMenu("Hashes");
+        var help = new JMenu("Help");
+        var fileQuit = new JMenuItem("Quit");
+        fileQuit.setToolTipText("Quit QuickerHash");
+        fileQuit.setIcon(new FlatSVGIcon(getClass().getResource("/icons/quit.svg")).derive(16, 16));
 
-            var helpAbout = new JMenuItem("About");
-            helpAbout.setToolTipText("Show information about QuickerHash");
-            helpAbout.setIcon(new FlatSVGIcon(getClass().getResource("/icons/about.svg")).derive(16, 16));
-            var helpLatest = new JMenuItem("Get the latest release");
-            helpLatest.setToolTipText("Visit the QuickerHash release page (requires internet connection)");
-            helpLatest.setIcon(new FlatSVGIcon(getClass().getResource("/icons/download.svg")).derive(16, 16));
-            var helpReport = new JMenuItem("Report a Bug");
-            helpReport.setToolTipText("Report a bug to the QuickerHash maintainer (requires internet connection)");
-            helpReport.setIcon(new FlatSVGIcon(getClass().getResource("/icons/bug.svg")).derive(16, 16));
+        var helpAbout = new JMenuItem("About");
+        helpAbout.setToolTipText("Show information about QuickerHash");
+        helpAbout.setIcon(new FlatSVGIcon(getClass().getResource("/icons/about.svg")).derive(16, 16));
+        var helpLatest = new JMenuItem("Get the latest release");
+        helpLatest.setToolTipText("Visit the QuickerHash release page (requires internet connection)");
+        helpLatest.setIcon(new FlatSVGIcon(getClass().getResource("/icons/download.svg")).derive(16, 16));
+        var helpReport = new JMenuItem("Report a Bug");
+        helpReport.setToolTipText("Report a bug to the QuickerHash maintainer (requires internet connection)");
+        helpReport.setIcon(new FlatSVGIcon(getClass().getResource("/icons/bug.svg")).derive(16, 16));
 
-            fileQuit.addActionListener(_ -> dispose());
-            helpAbout.addActionListener(_ -> showAbout());
-            hashesCommon.addActionListener(_ -> populateHashBoxes());
-            hashesCommon.setToolTipText("Hashes in common use");
-            hashesCommon.setIcon(new FlatSVGIcon(getClass().getResource("/icons/common.svg")).derive(16, 16));
-            hashesObsolete.addActionListener(_ -> populateHashBoxes());
-            hashesObsolete.setToolTipText("Obsolete, insecure hashes");
-            hashesObsolete.setIcon(new FlatSVGIcon(getClass().getResource("/icons/warning.svg")).derive(16, 16));
-            hashesUS.addActionListener(_ -> populateHashBoxes());
-            hashesUS.setToolTipText("U.S. government standard hashes");
-            hashesUS.setIcon(new FlatSVGIcon(getClass().getResource("/icons/us.svg")).derive(16, 16));
-            hashesUkrainian.addActionListener(_ -> populateHashBoxes());
-            hashesUkrainian.setToolTipText("Ukrainian government standard hashes");
-            hashesUkrainian.setIcon(new FlatSVGIcon(getClass().getResource("/icons/ukraine.svg")).derive(16, 16));
-            hashesRussian.addActionListener(_ -> populateHashBoxes());
-            hashesRussian.setToolTipText("Russian government standard hashes");
-            hashesRussian.setIcon(new FlatSVGIcon(getClass().getResource("/icons/russia.svg")).derive(16, 16));
-            hashesChinese.addActionListener(_ -> populateHashBoxes());
-            hashesChinese.setToolTipText("Chinese government standard hashes");;
-            hashesChinese.setIcon(new FlatSVGIcon(getClass().getResource("/icons/china.svg")).derive(16, 16));
-            hashesExotic.addActionListener(_ -> populateHashBoxes());
-            hashesExotic.setToolTipText("Exotic hashes");
-            hashesExotic.setIcon(new FlatSVGIcon(getClass().getResource("/icons/propeller.svg")).derive(16, 16));
+        fileQuit.addActionListener(_ -> dispose());
+        helpAbout.addActionListener(_ -> showAbout());
+        hashesCommon.addActionListener(_ -> populateHashBoxes());
+        hashesCommon.setToolTipText("Hashes in common use");
+        hashesCommon.setIcon(new FlatSVGIcon(getClass().getResource("/icons/common.svg")).derive(16, 16));
+        hashesObsolete.addActionListener(_ -> populateHashBoxes());
+        hashesObsolete.setToolTipText("Obsolete, insecure hashes");
+        hashesObsolete.setIcon(new FlatSVGIcon(getClass().getResource("/icons/warning.svg")).derive(16, 16));
+        hashesUS.addActionListener(_ -> populateHashBoxes());
+        hashesUS.setToolTipText("U.S. government standard hashes");
+        hashesUS.setIcon(new FlatSVGIcon(getClass().getResource("/icons/us.svg")).derive(16, 16));
+        hashesUkrainian.addActionListener(_ -> populateHashBoxes());
+        hashesUkrainian.setToolTipText("Ukrainian government standard hashes");
+        hashesUkrainian.setIcon(new FlatSVGIcon(getClass().getResource("/icons/ukraine.svg")).derive(16, 16));
+        hashesRussian.addActionListener(_ -> populateHashBoxes());
+        hashesRussian.setToolTipText("Russian government standard hashes");
+        hashesRussian.setIcon(new FlatSVGIcon(getClass().getResource("/icons/russia.svg")).derive(16, 16));
+        hashesChinese.addActionListener(_ -> populateHashBoxes());
+        hashesChinese.setToolTipText("Chinese government standard hashes");
+        hashesChinese.setIcon(new FlatSVGIcon(getClass().getResource("/icons/china.svg")).derive(16, 16));
+        hashesExotic.addActionListener(_ -> populateHashBoxes());
+        hashesExotic.setToolTipText("Exotic hashes");
+        hashesExotic.setIcon(new FlatSVGIcon(getClass().getResource("/icons/propeller.svg")).derive(16, 16));
 
-            helpLatest.addActionListener(_ -> {
-                try {
-                    Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/releases"));
-                } catch (IOException e) {
-                    JOptionPane.showMessageDialog(this,
-                            "I/O error: " + e.getMessage(),
-                            "I/O error",
-                            JOptionPane.ERROR_MESSAGE);
-                } catch (URISyntaxException _) {
-                    JOptionPane.showMessageDialog(this,
-                            "Malformed URI: this is a weird bug",
-                            "Malformed URI",
-                            JOptionPane.ERROR_MESSAGE);
-                }
-            });
-
-            helpReport.addActionListener(_ -> {
-                try {
-                    Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/issues"));
-                } catch (IOException e) {
-                    JOptionPane.showMessageDialog(this,
-                            "I/O error: " + e.getMessage(),
-                            "I/O error",
-                            JOptionPane.ERROR_MESSAGE);
-                } catch (URISyntaxException e) {
-                    JOptionPane.showMessageDialog(this,
-                            "Malformed URI: this is a weird bug",
-                            "Malformed URI",
-                            JOptionPane.ERROR_MESSAGE);
-                }
-            });
-            if (Desktop.isDesktopSupported()) {
-                Desktop desktop = Desktop.getDesktop();
-                if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
-                    desktop.setAboutHandler(_ -> showAbout());
-                }
+        helpLatest.addActionListener(_ -> {
+            try {
+                Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/releases"));
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                        "I/O error: " + e.getMessage(),
+                        "I/O error",
+                        JOptionPane.ERROR_MESSAGE);
+            } catch (URISyntaxException _) {
+                JOptionPane.showMessageDialog(this,
+                        "Malformed URI: this is a weird bug",
+                        "Malformed URI",
+                        JOptionPane.ERROR_MESSAGE);
             }
+        });
 
-            mb.add(file);
-            mb.add(hashes);
-            mb.add(help);
-
-            file.add(fileQuit);
-            hashes.add(hashesCommon);
-            hashes.add(hashesObsolete);
-            hashes.add(hashesUS);
-            hashes.add(hashesUkrainian);
-            hashes.add(hashesRussian);
-            hashes.add(hashesChinese);
-            hashes.add(hashesExotic);
-            help.add(helpAbout);
-            help.add(helpLatest);
-            help.add(helpReport);
-
-            int enabledHashes = prefs.getInt("enabled-hashes", 1);
-            hashesCommon.setSelected((enabledHashes & 1) > 0);
-            hashesObsolete.setSelected((enabledHashes & 2) > 0);
-            hashesUS.setSelected((enabledHashes & 4) > 0);
-            hashesUkrainian.setSelected((enabledHashes & 8) > 0);
-            hashesRussian.setSelected((enabledHashes & 16) > 0);
-            hashesChinese.setSelected((enabledHashes & 32) > 0);
-            hashesExotic.setSelected((enabledHashes & 64) > 0);
-            return mb;
+        helpReport.addActionListener(_ -> {
+            try {
+                Desktop.getDesktop().browse(new URI("https://github.com/rjhansen/quickerhash/issues"));
+            } catch (IOException e) {
+                JOptionPane.showMessageDialog(this,
+                        "I/O error: " + e.getMessage(),
+                        "I/O error",
+                        JOptionPane.ERROR_MESSAGE);
+            } catch (URISyntaxException e) {
+                JOptionPane.showMessageDialog(this,
+                        "Malformed URI: this is a weird bug",
+                        "Malformed URI",
+                        JOptionPane.ERROR_MESSAGE);
+            }
+        });
+        if (Desktop.isDesktopSupported()) {
+            Desktop desktop = Desktop.getDesktop();
+            if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
+                desktop.setAboutHandler(_ -> showAbout());
+            }
         }
+
+        mb.add(file);
+        mb.add(hashes);
+        mb.add(help);
+
+        file.add(fileQuit);
+        hashes.add(hashesCommon);
+        hashes.add(hashesObsolete);
+        hashes.add(hashesUS);
+        hashes.add(hashesUkrainian);
+        hashes.add(hashesRussian);
+        hashes.add(hashesChinese);
+        hashes.add(hashesExotic);
+        help.add(helpAbout);
+        help.add(helpLatest);
+        help.add(helpReport);
+
+        int enabledHashes = prefs.getInt("enabled-hashes", 1);
+        hashesCommon.setSelected((enabledHashes & 1) > 0);
+        hashesObsolete.setSelected((enabledHashes & 2) > 0);
+        hashesUS.setSelected((enabledHashes & 4) > 0);
+        hashesUkrainian.setSelected((enabledHashes & 8) > 0);
+        hashesRussian.setSelected((enabledHashes & 16) > 0);
+        hashesChinese.setSelected((enabledHashes & 32) > 0);
+        hashesExotic.setSelected((enabledHashes & 64) > 0);
+        return mb;
+    }
 
     public MainWindow() {
-            super("QuickerHash");
-            for (var foo: new String[] { "Common", "Obsolete", "US", "Ukrainian", "Russian", "Chinese", "Exotic"}) {
-                hashCategories.put(foo, new HashSet<>());
-            }
+        super("QuickerHash");
+        for (var foo : new String[]{"Common", "Obsolete", "US", "Ukrainian", "Russian", "Chinese", "Exotic"})
+            hashCategories.put(foo, new HashSet<>());
+        for (var common : new String[]{"MD5", "SHA-1", "SHA-256"}) hashCategories.get("Common").add(common);
+        for (var obs : new String[]{"MD2", "MD4", "MD5", "SHA-1", "RIPEMD128", "RIPEMD160"})
+            hashCategories.get("Obsolete").add(obs);
+        for (var US : new String[]{"SHA-224", "SHA-256", "SHA-384", "SHA-512", "SHA-512/224",
+                "SHA-512/256", "SHA3-224", "SHA3-256", "SHA3-384", "SHA3-512"})
+            hashCategories.get("US").add(US);
+        for (var UA : new String[]{"DSTU7564-256", "DSTU7564-384", "DSTU7564-512"})
+            hashCategories.get("Ukrainian").add(UA);
+        for (var RU : new String[]{"GOST3411", "GOST3411-2012-256", "GOST3411-2012-512"})
+            hashCategories.get("Russian").add(RU);
+        for (var CN : new String[]{"SM3"}) hashCategories.get("Chinese").add(CN);
+        for (var ex : new String[]{"BLAKE2B-160", "BLAKE2B-256", "BLAKE2B-384", "BLAKE2B-512",
+                "BLAKE2S-128", "BLAKE2S-160", "BLAKE2S-224", "BLAKE2S-256", "BLAKE3-256",
+                "HARAKA-256", "HARAKA-512", "KECCAK-224", "KECCAK-256", "KECCAK-288", "KECCAK-384",
+                "KECCAK-512", "PARALLELHASH128-256", "PARALLELHASH256-512", "RIPEMD256",
+                "RIPEMD320", "SHAKE128-256", "SHAKE256-512", "SKEIN-1024-1024", "SKEIN-1024-384",
+                "SKEIN-1024-512", "SKEIN-256-128", "SKEIN-256-160", "SKEIN-256-224", "SKEIN-256-256",
+                "SKEIN-512-128", "SKEIN-512-160", "SKEIN-512-224", "SKEIN-512-256", "SKEIN-512-384",
+                "SKEIN-512-512", "TIGER", "TUPLEHASH128-256", "TUPLEHASH256-512", "WHIRLPOOL"})
+            hashCategories.get("Exotic").add(ex);
 
-            for (var common: new String[] {"MD5", "SHA-1", "SHA-256"}) hashCategories.get("Common").add(common);
-            for (var obs: new String[] {"MD2", "MD4", "MD5", "SHA-1", "RIPEMD128", "RIPEMD160"}) hashCategories.get("Obsolete").add(obs);
-            for (var US: new String[] {"SHA-224", "SHA-256", "SHA-384", "SHA-512", "SHA-512/224",
-                    "SHA-512/256", "SHA3-224", "SHA3-256", "SHA3-384", "SHA3-512"}) hashCategories.get("US").add(US);
-            for (var UA: new String[] {"DSTU7564-256", "DSTU7564-384", "DSTU7564-512"}) hashCategories.get("Ukrainian").add(UA);
-            for (var RU: new String[] {"GOST3411", "GOST3411-2012-256", "GOST3411-2012-512"}) hashCategories.get("Russian").add(RU);
-            for (var CN: new String[] {"SM3"}) hashCategories.get("Chinese").add(CN);
-            for (var ex: new String[] {"BLAKE2B-160", "BLAKE2B-256", "BLAKE2B-384", "BLAKE2B-512",
-                    "BLAKE2S-128", "BLAKE2S-160", "BLAKE2S-224", "BLAKE2S-256", "BLAKE3-256",
-                    "HARAKA-256", "HARAKA-512", "KECCAK-224", "KECCAK-256", "KECCAK-288", "KECCAK-384",
-                    "KECCAK-512", "PARALLELHASH128-256", "PARALLELHASH256-512", "RIPEMD256",
-                    "RIPEMD320", "SHAKE128-256", "SHAKE256-512", "SKEIN-1024-1024", "SKEIN-1024-384",
-                    "SKEIN-1024-512", "SKEIN-256-128", "SKEIN-256-160", "SKEIN-256-224", "SKEIN-256-256",
-                    "SKEIN-512-128", "SKEIN-512-160", "SKEIN-512-224", "SKEIN-512-256", "SKEIN-512-384",
-                    "SKEIN-512-512", "TIGER", "TUPLEHASH128-256", "TUPLEHASH256-512", "WHIRLPOOL"})
-                hashCategories.get("Exotic").add(ex);
-
-            setJMenuBar(makeMenuBar());
-            populateHashBoxes();
-            progressBar.setStringPainted(true);
-            progressBar.setString("Choose a file and algorithm, then click ‘Start’");
-            tabPane.addTab("Hash text", makeTextTab());
-            tabPane.addTab("Hash a file", makeFileTab());
-            tabPane.addTab("Hash a directory", makeDirectoryTab());
-            getContentPane().add(tabPane, BorderLayout.CENTER);
-        }
+        setJMenuBar(makeMenuBar());
+        populateHashBoxes();
+        progressBar.setStringPainted(true);
+        progressBar.setString("Choose a file and algorithm, then click ‘Start’");
+        tabPane.addTab("Hash text", makeTextTab());
+        tabPane.addTab("Hash a file", makeFileTab());
+        tabPane.addTab("Hash a directory", makeDirectoryTab());
+        getContentPane().add(tabPane, BorderLayout.CENTER);
     }
+}
