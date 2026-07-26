@@ -411,6 +411,12 @@ public class MainWindow extends JFrame {
         gbc.gridx = 3;
         gbc.gridy = 0;
         topPanel.add(directoryHashBox, gbc);
+        directoryHashBox.addItemListener(event -> {
+            if (event.getStateChange() == ItemEvent.SELECTED) {
+                ((DefaultTableModel) directoryHash.getModel()).setRowCount(0);
+                directoryHashCopy.setEnabled(false);
+            }
+        });
         directoryHashControl.setEnabled(false);
         gbc = new GridBagConstraints();
         gbc.gridx = 4;
