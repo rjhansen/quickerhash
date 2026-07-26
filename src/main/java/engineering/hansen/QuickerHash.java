@@ -8,11 +8,14 @@ package engineering.hansen;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.formdev.flatlaf.util.SystemInfo;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.swing.*;
+import java.security.Security;
 
 public class QuickerHash {
     static void main() {
+        Security.addProvider(new BouncyCastleProvider());
         SwingUtilities.invokeLater(() -> {
             try {
                 if (SystemInfo.isMacOS) {

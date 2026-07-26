@@ -22,6 +22,7 @@ dependencies {
     implementation("com.formdev:flatlaf:3.7.2")
     implementation("com.formdev:flatlaf-extras:3.7.2")
     implementation("com.github.weisj:jsvg:2.1.0")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.84")
 }
 
 java {
@@ -58,7 +59,7 @@ when {
                 )
                 installerOptions = listOf(
                     "--vendor", "Robert Hansen",
-                    "--icon", "src/packaging/icons/QuickerHash.icns",
+                    "--about-url", "https://github.com/rjhansen/quickerhash",
                     "--app-version", "$version",
                     // Note: if you're not me, either (a) substitute your
                     // own credentials or (b) omit the code signing commands.
@@ -98,6 +99,7 @@ when {
             group = "distribution"
             description = "Submits the signed dmg to Apple's notary service and waits for approval"
             dependsOn("signDmg")
+            mustRunAfter("jpackageImage", "jpackage")
 
             val dmgFile = layout.buildDirectory.file("jpackage/QuickerHash-$version.dmg")
             inputs.file(dmgFile)
@@ -119,6 +121,7 @@ when {
             group = "distribution"
             description = "Staples the notarization ticket to the dmg"
             dependsOn("notarizeDmg")
+            mustRunAfter("jpackageImage", "jpackage")
 
             val dmgFile = layout.buildDirectory.file("jpackage/QuickerHash-$version.dmg")
             inputs.file(dmgFile)
@@ -198,7 +201,7 @@ when {
                 installerOptions = listOf(
                     "--vendor", "Robert Hansen",
                     "--app-version", "$version",
-                    "--linux-package-name", "quickerhash",
+                    "--linux-package-name", "QuickerHash",
                     "--linux-menu-group", "Utility",
                     "--linux-shortcut",
                     "--linux-rpm-license-type", "ASL 2.0",
