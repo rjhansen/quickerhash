@@ -23,6 +23,7 @@ dependencies {
     implementation("com.formdev:flatlaf-extras:3.7.2")
     implementation("com.github.weisj:jsvg:2.1.0")
     implementation("org.bouncycastle:bcprov-jdk18on:1.84")
+    implementation("org.apache.commons:commons-csv:1.14.1")
 }
 
 java {

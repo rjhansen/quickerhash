@@ -6,4 +6,5 @@ module QuickerHash {
     requires com.github.weisj.jsvg;
     requires org.bouncycastle.provider;
     requires java.prefs;
+    requires org.apache.commons.csv;
 }

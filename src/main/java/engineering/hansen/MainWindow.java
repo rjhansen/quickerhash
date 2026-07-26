@@ -7,26 +7,101 @@ package engineering.hansen;
 
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import com.formdev.flatlaf.util.SystemFileChooser;
+import org.apache.commons.csv.CSVFormat;
+import org.apache.commons.csv.CSVPrinter;
+
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.awt.datatransfer.Clipboard;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.awt.event.ItemEvent;
+import java.io.*;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.*;
 import java.util.prefs.Preferences;
+import java.util.stream.Stream;
+
+class DirectoryHasher implements Runnable {
+    private final MainWindow mw;
+    private MessageDigest digest;
+    private String absPath;
+
+    public DirectoryHasher(MainWindow thingy, String digestName, String startRecursionAt) {
+        mw = thingy;
+        try {
+            digest = MessageDigest.getInstance(digestName);
+            absPath = startRecursionAt;
+        } catch (NoSuchAlgorithmException e) {
+            SwingUtilities.invokeLater(() ->
+                    JOptionPane.showMessageDialog(mw,
+                            "An error occurred while creating the hash engine:\n\n" + e.getMessage(),
+                            "I’m sorry…",
+                            JOptionPane.ERROR_MESSAGE));
+            digest = null;
+            absPath = null;
+        }
+    }
+
+    @Override
+    public void run() {
+        if (digest == null || absPath == null || !mw.getRecursiveHashRunning()) return;
+        try (Stream<Path> stream = Files.walk(Path.of(absPath))) {
+            stream.filter(Files::isRegularFile)
+                    .filter(Files::isReadable)
+                    .map(Path::toAbsolutePath)
+                    .map(Path::toString)
+                    .forEach(p -> {
+                        long totalBytesRead = 0;
+                        SwingUtilities.invokeLater(() -> {
+                            mw.getDirectoryProgressBar().setValue(0);
+                            mw.getDirectoryProgressBar().setString(p);
+                        });
+                        if (! mw.getRecursiveHashRunning())
+                            return;
+                        digest.reset();
+
+                        try (FileInputStream fh = new FileInputStream(p)) {
+                            var filesize = Files.size(Paths.get(p));
+                            var bytes = fh.readNBytes(1048576);
+                            totalBytesRead += bytes.length;
+                            while (mw.getRecursiveHashRunning() && bytes.length > 0) {
+                                digest.update(bytes);
+                                int fracDone = (int) (100.0 * ((float) totalBytesRead / (float) filesize));
+                                SwingUtilities.invokeLater(() -> mw.directoryProgressBar.setValue(fracDone));
+                                bytes = fh.readNBytes(1048576);
+                            }
+                            SwingUtilities.invokeLater(() -> mw.getDirectoryProgressBar().setValue(0));
+                            if (mw.getRecursiveHashRunning())
+                                mw.getTableModel().addRow(new String[] {
+                                    p,
+                                    mw.formatHash(digest.digest())
+                                });
+                        } catch (IOException e) {
+                            mw.setRecursiveHashRunning(false);
+                        }
+                    });
+            mw.endRecursiveHashing();
+            mw.setRecursiveHashRunning(false);
+        } catch (IOException e) {
+            // FIXME
+        }
+    }
+}
+
 
 class Hasher extends SwingWorker<byte[], Integer> {
     private final MainWindow mw;
@@ -112,16 +187,113 @@ public class MainWindow extends JFrame {
     final JCheckBoxMenuItem hashesChinese = new JCheckBoxMenuItem("Chinese");
     final JCheckBoxMenuItem hashesExotic = new JCheckBoxMenuItem("Exotics");
     final JButton hashControl = new JButton("Start");
+    final JButton directoryHashControl = new JButton("Start");
+    final JButton textHashCopy = new JButton("Copy");
+    final JButton fileHashCopy = new JButton("Copy");
+    final JButton directoryHashCopy = new JButton("Copy as CSV");
+    final DefaultTableModel model = new DefaultTableModel() {
+        final String[] columnNames = {"Filename", "Hash"};
+
+        @Override
+        public int getColumnCount() {
+            return columnNames.length;
+        }
+
+        @Override
+        public String getColumnName(int index) {
+            return columnNames[index];
+        }
+    };
+    final JTable directoryHash = new JTable(model) {
+        private static final long serialVersionUID = 1L;
+
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        };
+    };
     final JProgressBar progressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
+    final JProgressBar directoryProgressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
     final JComboBox<String> fileHashBox = new JComboBox<>();
     final JComboBox<String> textHashBox = new JComboBox<>();
+    final JComboBox<String> directoryHashBox = new JComboBox<>();
     final JComboBox<String> fileBox = makeFileBox();
+    final JComboBox<String> directoryBox = makeDirectoryBox();
     final JTabbedPane tabPane = new JTabbedPane();
     final HashMap<String, HashSet<String>> hashCategories = new HashMap<>();
+    boolean recursiveRunning = false;
     MessageDigest textDigest = null;
     boolean textEntered = false;
     Color originalColor;
     Hasher hasher;
+
+    DefaultTableModel getTableModel() {
+        return model;
+    }
+
+    synchronized boolean getRecursiveHashRunning() {
+        return recursiveRunning;
+    }
+
+    synchronized void setRecursiveHashRunning(boolean state) {
+        recursiveRunning = state;
+    }
+
+    private JComboBox<String> makeDirectoryBox () {
+        var model = new DefaultComboBoxModel<String>();
+        var _this = this;
+        var directoryBox = new JComboBox<>(model);
+        directoryBox.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        directoryBox.setEditable(false);
+        directoryBox.addPopupMenuListener(new PopupMenuListener() {
+            @Override
+            public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
+                SwingUtilities.invokeLater(() -> directoryBox.setPopupVisible(false));
+
+                var directoryChooser = new SystemFileChooser();
+                directoryChooser.setFileSelectionMode(SystemFileChooser.DIRECTORIES_ONLY);
+                int result = directoryChooser.showOpenDialog(_this);
+
+                if (result == SystemFileChooser.APPROVE_OPTION) {
+                    directoryHashControl.setEnabled(true);
+                    directoryHashControl.setText("Start");
+                    model.removeAllElements();
+                    File selectedFile = directoryChooser.getSelectedFile();
+                    String path = selectedFile.getAbsolutePath();
+                    if (((DefaultComboBoxModel<String>) directoryBox.getModel()).getIndexOf(path) == -1) {
+                        model.addElement(path);
+                    }
+                    directoryBox.setSelectedItem(path);
+                } else {
+                    model.removeAllElements();
+                    hashControl.setEnabled(false);
+                }
+            }
+
+            @Override
+            public void popupMenuWillBecomeInvisible(PopupMenuEvent e) {
+            }
+
+            @Override
+            public void popupMenuCanceled(PopupMenuEvent e) {
+            }
+        });
+        return directoryBox;
+    }
+
+    void endRecursiveHashing() {
+        directoryProgressBar.setString("");
+        directoryProgressBar.setValue(0);
+        directoryHashBox.setEnabled(true);
+        directoryHashControl.setText("Start");
+        directoryHashControl.setEnabled(true);
+        directoryBox.setEnabled(true);
+        directoryHash.setEnabled(true);
+        directoryHashCopy.setEnabled(directoryHash.getModel().getRowCount() > 0);
+    }
+
+    JProgressBar getDirectoryProgressBar() {
+        return directoryProgressBar;
+    }
 
     void endFileHashing() {
         updateProgressBar(0);
@@ -135,8 +307,10 @@ public class MainWindow extends JFrame {
     void setFileHash(boolean complete, byte[] contents) {
         if (complete) {
             fileHash.setText(formatHash(contents));
+            fileHashCopy.setEnabled(true);
         } else {
             fileHash.setText("Operation cancelled.");
+            fileHashCopy.setEnabled(false);
         }
     }
 
@@ -176,10 +350,102 @@ public class MainWindow extends JFrame {
         return foo;
     }
 
+    private JPanel makeDirectoryTab() {
+        var directoryTab = new JPanel();
+        directoryTab.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        directoryTab.setLayout(new BorderLayout());
+        directoryHash.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        directoryProgressBar.setToolTipText("Each file's progress will display here");
+        directoryProgressBar.setBorder(BorderFactory.createTitledBorder(directoryProgressBar.getBorder(), "Hash progress"));
+        directoryProgressBar.setValue(0);
+        directoryProgressBar.setFont(new Font("Monospaced", Font.PLAIN, 10));
+        directoryProgressBar.setStringPainted(true);
+        directoryProgressBar.setString("");
+
+
+        var topPanel = new JPanel();
+        topPanel.setLayout(new GridBagLayout());
+        var label = new JLabel("Hash this directory: ");
+        var gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        topPanel.add(label, gbc);
+        gbc = new GridBagConstraints();
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        topPanel.add(directoryBox, gbc);
+        gbc = new GridBagConstraints();
+        gbc.gridx = 2;
+        gbc.gridy = 0;
+        topPanel.add(new JLabel(" with "), gbc);
+        gbc = new GridBagConstraints();
+        gbc.gridx = 3;
+        gbc.gridy = 0;
+        topPanel.add(directoryHashBox, gbc);
+        directoryHashControl.setEnabled(false);
+        gbc = new GridBagConstraints();
+        gbc.gridx = 4;
+        gbc.gridy = 0;
+        topPanel.add(directoryHashControl, gbc);
+        directoryHashControl.addActionListener(_ -> {
+            if (Objects.equals(directoryHashControl.getText(), "Start")) {
+                for (int i = 0 ; i < directoryHash.getModel().getRowCount() ; i++) {
+                    ((DefaultTableModel)directoryHash.getModel()).removeRow(i);
+                }
+                directoryHash.setEnabled(false);
+                directoryHashControl.setText("Cancel");
+                directoryHashCopy.setEnabled(false);
+                directoryBox.setEnabled(false);
+                directoryHashBox.setEnabled(false);
+                setRecursiveHashRunning(true);
+                new Thread(new DirectoryHasher(this,
+                        Objects.requireNonNull(directoryHashBox.getSelectedItem()).toString(),
+                        Objects.requireNonNull(directoryBox.getSelectedItem()).toString()))
+                        .start();
+            } else { // we're stopping
+                setRecursiveHashRunning(false);
+            }
+        });
+
+        var mid = new JPanel();
+        directoryHashCopy.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
+        mid.setLayout(new BorderLayout());
+        mid.add(directoryHashCopy, BorderLayout.NORTH);
+        var jsp = new JScrollPane(directoryHash);
+        jsp.setBorder(BorderFactory.createTitledBorder(jsp.getBorder(), "Hash results"));
+        mid.add(jsp, BorderLayout.CENTER);
+
+        directoryTab.add(topPanel, BorderLayout.NORTH);
+        directoryTab.add(mid);
+        directoryTab.add(directoryProgressBar, BorderLayout.SOUTH);
+
+        directoryHashCopy.addActionListener(_ -> {
+            var sw = new StringWriter();
+            try (CSVPrinter printer = new CSVPrinter(sw, CSVFormat.EXCEL)) {
+                printer.printRecord("Filename", "Hash");
+                for (int i = 0 ; i < directoryHash.getModel().getRowCount() ; i++) {
+                    String fn = directoryHash.getModel().getValueAt(i, 0).toString();
+                    String hv = directoryHash.getModel().getValueAt(i, 1).toString();
+                    printer.printRecord(fn, hv);
+                }
+            } catch (IOException ex) {
+                // pass: it can't fail, as we're writing to memory
+            }
+            StringSelection stringSelection = new StringSelection(sw.toString());
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(stringSelection, null);
+        });
+
+        return directoryTab;
+    }
+
     private JPanel makeFileTab() {
         fileHash.setFont(new Font("Monospaced", Font.BOLD, 12));
         fileHash.setEditable(false);
         fileHash.setText("");
+        fileHashCopy.setEnabled(false);
         fileHash.setToolTipText("The hash is displayed here grouped in blocks of eight hexadecimal digits");
         progressBar.setToolTipText("This progress bar shows how much of the file has been read");
         var jsp = new JScrollPane(fileHash);
@@ -193,7 +459,7 @@ public class MainWindow extends JFrame {
 
         var topPanel = new JPanel();
         topPanel.setLayout(new GridBagLayout());
-        var label = new JLabel("Hash this: ");
+        var label = new JLabel("Hash this file: ");
         var gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 0;
@@ -229,7 +495,23 @@ public class MainWindow extends JFrame {
         q.add(new JLabel("Progress: "), BorderLayout.WEST);
         q.add(progressBar, BorderLayout.CENTER);
         p.add(q, BorderLayout.NORTH);
-        p.add(jsp, BorderLayout.SOUTH);
+        var foo = new JPanel();
+        foo.setLayout(new GridBagLayout());
+        gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.anchor = GridBagConstraints.LINE_START;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        foo.add(jsp, gbc);
+        gbc = new GridBagConstraints();
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.VERTICAL;
+        gbc.anchor = GridBagConstraints.LINE_END;
+        fileHashCopy.setEnabled(false);
+        foo.add(fileHashCopy, gbc);
+        p.add(foo, BorderLayout.SOUTH);
         fileTab.add(p, BorderLayout.CENTER);
 
         hashControl.setToolTipText("This button starts (and cancels) hashing");
@@ -237,6 +519,7 @@ public class MainWindow extends JFrame {
             if (Objects.equals(hashControl.getText(), "Start")) {
                 hashControl.setText("Cancel");
                 fileHash.setText("Calculating hash...");
+                fileHashCopy.setEnabled(false);
                 fileBox.setEnabled(false);
                 fileHashBox.setEnabled(false);
                 updateProgressBar(0);
@@ -250,6 +533,20 @@ public class MainWindow extends JFrame {
                 if (hasher != null) {
                     hasher.cancel(true);
                 }
+            }
+        });
+
+        fileHashCopy.addActionListener(_ -> {
+            StringSelection stringSelection = new StringSelection(fileHash.getText());
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(stringSelection, null);
+        });
+        fileHashCopy.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
+
+        fileHashBox.addItemListener(event -> {
+            if (event.getStateChange() == ItemEvent.SELECTED) {
+                fileHash.setText("");
+                fileHashCopy.setEnabled(false);
             }
         });
 
@@ -330,13 +627,31 @@ public class MainWindow extends JFrame {
         jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
         jsp.setBorder(BorderFactory.createTitledBorder(textHash.getBorder(), "Hash value"));
+
+        var foo = new JPanel();
+        foo.setLayout(new GridBagLayout());
+        gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.weightx = 1.0;
+        gbc.anchor = GridBagConstraints.LINE_START;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        foo.add(jsp, gbc);
+        gbc = new GridBagConstraints();
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.VERTICAL;
+        gbc.anchor = GridBagConstraints.LINE_END;
+        textHashCopy.setEnabled(true);
+        foo.add(textHashCopy, gbc);
+
         gbc = new GridBagConstraints();
         gbc.gridx = 0;
         gbc.gridy = 2;
         gbc.fill = GridBagConstraints.BOTH;
         gbc.weightx = 0.0;
         gbc.weighty = 0.0;
-        textTab.add(jsp, gbc);
+        textTab.add(foo, gbc);
 
         textArea.getDocument().addDocumentListener(new DocumentListener() {
             @Override
@@ -360,6 +675,13 @@ public class MainWindow extends JFrame {
                 textHash.setText(formatHash((hash)));
             }
         });
+
+        textHashCopy.addActionListener(_ -> {
+            StringSelection stringSelection = new StringSelection(textHash.getText());
+            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+            clipboard.setContents(stringSelection, null);
+        });
+        textHashCopy.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
 
         return textTab;
     }
@@ -420,6 +742,7 @@ public class MainWindow extends JFrame {
     void populateHashBoxes() {
         textHashBox.removeAllItems();
         fileHashBox.removeAllItems();
+        directoryHashBox.removeAllItems();
         HashSet<String> enabled = new HashSet<>();
         int prefNum = 0;
         if (hashesCommon.isSelected()) {
@@ -459,11 +782,17 @@ public class MainWindow extends JFrame {
         for (var s: enArr) {
             textHashBox.addItem(s);
             fileHashBox.addItem(s);
+            directoryHashBox.addItem(s);
         }
 
         textHashBox.setSelectedIndex(0);
         fileHashBox.setSelectedIndex(0);
+        directoryHashBox.setSelectedIndex(0);
+        fileHashCopy.setEnabled(false);
+        directoryHashCopy.setEnabled(false);
         fileHash.setText("");
+        var dtm = (DefaultTableModel) directoryHash.getModel();
+        dtm.setRowCount(0);
     }
 
         JMenuBar makeMenuBar () {
@@ -603,6 +932,7 @@ public class MainWindow extends JFrame {
             progressBar.setString("Choose a file and algorithm, then click ‘Start’");
             tabPane.addTab("Hash text", makeTextTab());
             tabPane.addTab("Hash a file", makeFileTab());
+            tabPane.addTab("Hash a directory", makeDirectoryTab());
             getContentPane().add(tabPane, BorderLayout.CENTER);
         }
     }
