@@ -6,7 +6,7 @@ plugins {
 }
 
 group = "engineering.hansen"
-version = "1.0"
+version = "1.1"
 val osName = System.getProperty("os.name").lowercase()
 
 application {
