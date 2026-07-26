@@ -34,7 +34,7 @@ java {
 when {
     osName.contains("mac") -> {
         jlink {
-            options.set(listOf("--strip-debug", "--compress=zip-6", "--no-header-files", "--no-man-pages"))
+            options.set(listOf("--strip-debug", "--compress=zip-6", "--no-header-files", "--no-man-pages", "--ignore-signing-information"))
 
             launcher {
                 name = "QuickerHash"
@@ -180,7 +180,7 @@ when {
     }
     osName.contains("linux") -> {
         jlink {
-            options.set(listOf("--strip-debug", "--compress=zip-6", "--no-header-files", "--no-man-pages"))
+            options.set(listOf("--strip-debug", "--compress=zip-6", "--no-header-files", "--no-man-pages", "--ignore-signing-information"))
 
             launcher {
                 name = "QuickerHash"
@@ -244,7 +244,7 @@ when {
     }
     osName.contains("win") -> {
         jlink {
-            options.set(listOf("--strip-debug", "--compress=zip-6", "--no-header-files", "--no-man-pages"))
+            options.set(listOf("--strip-debug", "--compress=zip-6", "--no-header-files", "--no-man-pages", "--ignore-signing-information"))
 
             launcher {
                 name = "QuickerHash"

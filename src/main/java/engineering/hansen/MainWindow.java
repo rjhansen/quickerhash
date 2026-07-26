@@ -25,12 +25,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.Security;
-import java.util.HexFormat;
-import java.util.Objects;
-import java.util.TreeSet;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.*;
 
 class Hasher extends SwingWorker<byte[], Integer> {
     private final MainWindow mw;
@@ -107,14 +102,19 @@ public class MainWindow extends JFrame {
     final JTextArea textArea = new JTextArea();
     final JTextField textHash = new JTextField();
     final JTextField fileHash = new JTextField();
-    final JRadioButtonMenuItem hashesCommon = new JRadioButtonMenuItem("Only show commonly-used hashes");
-    final JRadioButtonMenuItem hashesExotic = new JRadioButtonMenuItem("Show all hashes, including exotics");
+    final JCheckBoxMenuItem hashesCommon = new JCheckBoxMenuItem("Common");
+    final JCheckBoxMenuItem hashesObsolete = new JCheckBoxMenuItem("Obsolete");
+    final JCheckBoxMenuItem hashesUS = new JCheckBoxMenuItem("U.S.");
+    final JCheckBoxMenuItem hashesRussian = new JCheckBoxMenuItem("Russian");
+    final JCheckBoxMenuItem hashesUkrainian = new JCheckBoxMenuItem("Ukrainian");
+    final JCheckBoxMenuItem hashesExotic = new JCheckBoxMenuItem("Exotics");
     final JButton hashControl = new JButton("Start");
     final JProgressBar progressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
     final JComboBox<String> fileHashBox = new JComboBox<>();
     final JComboBox<String> textHashBox = new JComboBox<>();
     final JComboBox<String> fileBox = makeFileBox();
     final JTabbedPane tabPane = new JTabbedPane();
+    final HashMap<String, HashSet<String>> hashCategories = new HashMap<>();
     MessageDigest textDigest = null;
     boolean textEntered = false;
     Color originalColor;
@@ -417,20 +417,29 @@ public class MainWindow extends JFrame {
     void populateHashBoxes() {
         textHashBox.removeAllItems();
         fileHashBox.removeAllItems();
-        if (hashesCommon.isSelected()) {
-            for (String algo : new String[]{"MD5", "SHA-1", "SHA-256", "SHA3-256"}) {
-                textHashBox.addItem(algo);
-                fileHashBox.addItem(algo);
-            }
-        } else {
-            Pattern p = Pattern.compile("^(OID\\.)?\\d+(\\.\\d+)*$");
-            for (String algo : new TreeSet<>(Security.getAlgorithms("MessageDigest"))) {
-                Matcher m = p.matcher(algo);
-                if (m.matches()) continue;
-                textHashBox.addItem(algo);
-                fileHashBox.addItem(algo);
-            }
+        HashSet<String> enabled = new HashSet<>();
+        if (hashesCommon.isSelected())
+            enabled.addAll(hashCategories.get("Common"));
+        if (hashesObsolete.isSelected())
+            enabled.addAll(hashCategories.get("Obsolete"));
+        if (hashesUS.isSelected())
+            enabled.addAll(hashCategories.get("US"));
+        if (hashesUkrainian.isSelected())
+            enabled.addAll(hashCategories.get("Ukrainian"));
+        if (hashesRussian.isSelected())
+            enabled.addAll(hashCategories.get("Russian"));
+        if (hashesExotic.isSelected())
+            enabled.addAll(hashCategories.get("Exotic"));
+        if (enabled.isEmpty())
+            enabled.add("MD5");
+
+        String[] enArr = enabled.toArray(new String[]{});
+        Arrays.sort(enArr);
+        for (var s: enArr) {
+            textHashBox.addItem(s);
+            fileHashBox.addItem(s);
         }
+
         textHashBox.setSelectedIndex(0);
         fileHashBox.setSelectedIndex(0);
         fileHash.setText("");
@@ -444,9 +453,6 @@ public class MainWindow extends JFrame {
             var fileQuit = new JMenuItem("Quit");
             fileQuit.setToolTipText("Quit QuickerHash");
             fileQuit.setIcon(new FlatSVGIcon(getClass().getResource("/icons/quit.svg")).derive(16, 16));
-            var bg = new ButtonGroup();
-            bg.add(hashesCommon);
-            bg.add(hashesExotic);
             hashesCommon.setSelected(true);
 
             var helpAbout = new JMenuItem("About");
@@ -462,9 +468,20 @@ public class MainWindow extends JFrame {
             fileQuit.addActionListener(_ -> dispose());
             helpAbout.addActionListener(_ -> showAbout());
             hashesCommon.addActionListener(_ -> populateHashBoxes());
-            hashesCommon.setToolTipText("Only show hash algorithms commonly used in the United States");
+            hashesCommon.setToolTipText("Hashes in common use");
+            hashesObsolete.addActionListener(_ -> populateHashBoxes());
+            hashesObsolete.setToolTipText("Obsolete, insecure hashes");
+            hashesUS.addActionListener(_ -> populateHashBoxes());
+            hashesUS.setToolTipText("U.S. government standard hashes");
+            hashesUS.setIcon(new FlatSVGIcon(getClass().getResource("/icons/us.svg")).derive(16, 16));
+            hashesUkrainian.addActionListener(_ -> populateHashBoxes());
+            hashesUkrainian.setToolTipText("Ukrainian government standard hashes");
+            hashesUkrainian.setIcon(new FlatSVGIcon(getClass().getResource("/icons/ukraine.svg")).derive(16, 16));
+            hashesRussian.addActionListener(_ -> populateHashBoxes());
+            hashesRussian.setToolTipText("Russian government standard hashes");
+            hashesRussian.setIcon(new FlatSVGIcon(getClass().getResource("/icons/russia.svg")).derive(16, 16));
             hashesExotic.addActionListener(_ -> populateHashBoxes());
-            hashesExotic.setToolTipText("Show all the hash algorithms QuickerHash supports");
+            hashesExotic.setToolTipText("Exotic hashes");
             hashesExotic.setIcon(new FlatSVGIcon(getClass().getResource("/icons/propeller.svg")).derive(16, 16));
 
             helpLatest.addActionListener(_ -> {
@@ -511,6 +528,11 @@ public class MainWindow extends JFrame {
 
             file.add(fileQuit);
             hashes.add(hashesCommon);
+            hashesCommon.setEnabled(true);
+            hashes.add(hashesObsolete);
+            hashes.add(hashesUS);
+            hashes.add(hashesUkrainian);
+            hashes.add(hashesRussian);
             hashes.add(hashesExotic);
             help.add(helpAbout);
             help.add(helpLatest);
@@ -520,6 +542,29 @@ public class MainWindow extends JFrame {
 
     public MainWindow() {
             super("QuickerHash");
+            hashCategories.put("Common", new HashSet<>());
+            hashCategories.put("Obsolete", new HashSet<>());
+            hashCategories.put("US", new HashSet<>());
+            hashCategories.put("Ukrainian", new HashSet<>());
+            hashCategories.put("Russian", new HashSet<>());
+            hashCategories.put("Exotic", new HashSet<>());
+
+            for (var common: new String[] {"MD5", "SHA-1", "SHA-256"}) hashCategories.get("Common").add(common);
+            for (var obs: new String[] {"MD2", "MD4", "MD5", "SHA-1", "RIPEMD128", "RIPEMD160"}) hashCategories.get("Obsolete").add(obs);
+            for (var US: new String[] {"SHA-224", "SHA-256", "SHA-384", "SHA-512", "SHA-512/224",
+                    "SHA-512/256", "SHA3-224", "SHA3-256", "SHA3-384", "SHA3-512"}) hashCategories.get("US").add(US);
+            for (var UA: new String[] {"DSTU7564-256", "DSTU7564-384", "DSTU7564-512"}) hashCategories.get("Ukrainian").add(UA);
+            for (var RU: new String[] {"GOST3411", "GOST3411-2012-256", "GOST3411-2012-512"}) hashCategories.get("Russian").add(RU);
+            for (var ex: new String[] {"BLAKE2B-160", "BLAKE2B-256", "BLAKE2B-384", "BLAKE2B-512",
+                    "BLAKE2S-128", "BLAKE2S-160", "BLAKE2S-224", "BLAKE2S-256", "BLAKE3-256",
+                    "HARAKA-256", "HARAKA-512", "KECCAK-224", "KECCAK-256", "KECCAK-288", "KECCAK-384",
+                    "KECCAK-512", "PARALLELHASH128-256", "PARALLELHASH256-512", "RIPEMD256",
+                    "RIPEMD320", "SHAKE128-256", "SHAKE256-512", "SKEIN-1024-1024", "SKEIN-1024-384",
+                    "SKEIN-1024-512", "SKEIN-256-128", "SKEIN-256-160", "SKEIN-256-224", "SKEIN-256-256",
+                    "SKEIN-512-128", "SKEIN-512-160", "SKEIN-512-224", "SKEIN-512-256", "SKEIN-512-384",
+                    "SKEIN-512-512", "SM3", "TIGER", "TUPLEHASH128-256", "TUPLEHASH256-512",
+                    "WHIRLPOOL"}) hashCategories.get("Exotic").add(ex);
+
             setJMenuBar(makeMenuBar());
             populateHashBoxes();
             progressBar.setStringPainted(true);
