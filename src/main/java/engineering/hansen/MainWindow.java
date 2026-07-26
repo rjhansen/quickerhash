@@ -223,7 +223,7 @@ public class MainWindow extends JFrame {
     final JButton directoryHashControl = new JButton("Start");
     final JButton textHashCopy = new JButton("Copy");
     final JButton fileHashCopy = new JButton("Copy");
-    final JButton directoryHashCopy = new JButton("Copy as CSV");
+    final JButton directoryHashCopy = new JButton("Copy");
     final DefaultTableModel model = new DefaultTableModel() {
         final String[] columnNames = {"Filename", "Hash"};
 
@@ -448,14 +448,27 @@ public class MainWindow extends JFrame {
         var mid = new JPanel();
         directoryHashCopy.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
         mid.setLayout(new BorderLayout());
-        mid.add(directoryHashCopy, BorderLayout.NORTH);
         var jsp = new JScrollPane(directoryHash);
         jsp.setBorder(BorderFactory.createTitledBorder(jsp.getBorder(), "Hash results"));
         mid.add(jsp, BorderLayout.CENTER);
 
         directoryTab.add(topPanel, BorderLayout.NORTH);
         directoryTab.add(mid);
-        directoryTab.add(directoryProgressBar, BorderLayout.SOUTH);
+        JPanel lower = new JPanel();
+        lower.setLayout(new GridBagLayout());
+        gbc = new GridBagConstraints();
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 1.0;
+        lower.add(directoryProgressBar, gbc);
+        gbc = new GridBagConstraints();
+        gbc.gridx = 1;
+        gbc.gridy = 0;
+        gbc.fill = GridBagConstraints.BOTH;
+        gbc.weightx = 0.0;
+        lower.add(directoryHashCopy, gbc);
+        directoryTab.add(lower, BorderLayout.SOUTH);
 
         directoryHashCopy.addActionListener(_ -> {
             var sw = new StringWriter();
