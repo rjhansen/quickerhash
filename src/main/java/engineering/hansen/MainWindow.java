@@ -35,7 +35,11 @@ import java.util.*;
 import java.util.prefs.Preferences;
 import java.util.stream.Stream;
 
-class DirectoryHasher implements Runnable {
+class DirectoryHasher extends SwingWorker<Void, DirectoryHasher.Update> {
+    sealed interface Update permits Progress, Completed {}
+    record Progress(String path, int percent) implements Update {}
+    record Completed(String path, String hash) implements Update {}
+
     private final MainWindow mw;
     private MessageDigest digest;
     private String absPath;
@@ -57,47 +61,76 @@ class DirectoryHasher implements Runnable {
     }
 
     @Override
-    public void run() {
-        if (digest == null || absPath == null || !mw.getRecursiveHashRunning()) return;
+    protected Void doInBackground() throws Exception {
+        if (digest == null || absPath == null) return null;
+
         try (Stream<Path> stream = Files.walk(Path.of(absPath))) {
-            stream.filter(Files::isRegularFile)
+            var it = stream.filter(Files::isRegularFile)
                     .filter(Files::isReadable)
                     .map(Path::toAbsolutePath)
                     .map(Path::toString)
-                    .forEach(p -> {
-                        long totalBytesRead = 0;
-                        SwingUtilities.invokeLater(() -> {
-                            mw.getDirectoryProgressBar().setValue(0);
-                            mw.getDirectoryProgressBar().setString(p);
-                        });
-                        if (! mw.getRecursiveHashRunning())
-                            return;
-                        digest.reset();
+                    .iterator();
 
-                        try (FileInputStream fh = new FileInputStream(p)) {
-                            var filesize = Files.size(Paths.get(p));
-                            var bytes = fh.readNBytes(1048576);
-                            totalBytesRead += bytes.length;
-                            while (mw.getRecursiveHashRunning() && bytes.length > 0) {
-                                digest.update(bytes);
-                                int fracDone = (int) (100.0 * ((float) totalBytesRead / (float) filesize));
-                                SwingUtilities.invokeLater(() -> mw.directoryProgressBar.setValue(fracDone));
-                                bytes = fh.readNBytes(1048576);
-                            }
-                            SwingUtilities.invokeLater(() -> mw.getDirectoryProgressBar().setValue(0));
-                            if (mw.getRecursiveHashRunning())
-                                mw.getTableModel().addRow(new String[] {
-                                    p,
-                                    mw.formatHash(digest.digest())
-                                });
-                        } catch (IOException e) {
-                            mw.setRecursiveHashRunning(false);
-                        }
-                    });
-            mw.endRecursiveHashing();
-            mw.setRecursiveHashRunning(false);
-        } catch (IOException e) {
-            // FIXME
+            while (!isCancelled() && it.hasNext()) {
+                String p = it.next();
+                digest.reset();
+                publish(new Progress(p, 0));
+
+                try (FileInputStream fh = new FileInputStream(p)) {
+                    var filesize = Files.size(Paths.get(p));
+                    long totalBytesRead = 0;
+                    var bytes = fh.readNBytes(1048576);
+
+                    while (!isCancelled() && bytes.length > 0) {
+                        digest.update(bytes);
+                        totalBytesRead += bytes.length;
+                        int fracDone = (int) (100.0 * ((float) totalBytesRead / (float) filesize));
+                        publish(new Progress(p, fracDone));
+                        bytes = fh.readNBytes(1048576);
+                    }
+
+                    if (!isCancelled()) {
+                        publish(new Completed(p, mw.formatHash(digest.digest())));
+                    }
+                } catch (IOException e) {
+                    // Skip this file but keep walking the rest of the directory,
+                    // rather than aborting the whole recursive hash.
+                    publish(new Completed(p, "ERROR: " + e.getMessage()));
+                }
+            }
+        }
+        return null;
+    }
+
+    @Override
+    protected void process(java.util.List<Update> chunks) {
+        for (var update : chunks) {
+            switch (update) {
+                case Progress prog -> {
+                    mw.getDirectoryProgressBar().setValue(prog.percent());
+                    mw.getDirectoryProgressBar().setString(prog.path());
+                }
+                case Completed done -> {
+                    mw.getDirectoryProgressBar().setValue(0);
+                    mw.getTableModel().addRow(new String[] { done.path(), done.hash() });
+                }
+            }
+        }
+    }
+
+    @Override
+    protected void done() {
+        mw.endRecursiveHashing();
+        if (!isCancelled()) {
+            try {
+                get(); // surfaces any exception thrown out of doInBackground()
+            } catch (Exception e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                JOptionPane.showMessageDialog(mw,
+                        "An error occurred while hashing the directory:\n\n" + cause.getMessage(),
+                        "I’m sorry…",
+                        JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 }
@@ -220,28 +253,21 @@ public class MainWindow extends JFrame {
     final JComboBox<String> directoryBox = makeDirectoryBox();
     final JTabbedPane tabPane = new JTabbedPane();
     final HashMap<String, HashSet<String>> hashCategories = new HashMap<>();
-    boolean recursiveRunning = false;
     MessageDigest textDigest = null;
     boolean textEntered = false;
     Color originalColor;
     Hasher hasher;
+    DirectoryHasher directoryHasher;
 
     DefaultTableModel getTableModel() {
         return model;
-    }
-
-    synchronized boolean getRecursiveHashRunning() {
-        return recursiveRunning;
-    }
-
-    synchronized void setRecursiveHashRunning(boolean state) {
-        recursiveRunning = state;
     }
 
     private JComboBox<String> makeDirectoryBox () {
         var model = new DefaultComboBoxModel<String>();
         var _this = this;
         var directoryBox = new JComboBox<>(model);
+        directoryBox.setToolTipText("Click here to choose which directory to hash");
         directoryBox.setFont(new Font("Monospaced", Font.PLAIN, 12));
         directoryBox.setEditable(false);
         directoryBox.addPopupMenuListener(new PopupMenuListener() {
@@ -250,6 +276,7 @@ public class MainWindow extends JFrame {
                 SwingUtilities.invokeLater(() -> directoryBox.setPopupVisible(false));
 
                 var directoryChooser = new SystemFileChooser();
+                directoryChooser.setMultiSelectionEnabled(false);
                 directoryChooser.setFileSelectionMode(SystemFileChooser.DIRECTORIES_ONLY);
                 int result = directoryChooser.showOpenDialog(_this);
 
@@ -391,21 +418,24 @@ public class MainWindow extends JFrame {
         topPanel.add(directoryHashControl, gbc);
         directoryHashControl.addActionListener(_ -> {
             if (Objects.equals(directoryHashControl.getText(), "Start")) {
-                for (int i = 0 ; i < directoryHash.getModel().getRowCount() ; i++) {
-                    ((DefaultTableModel)directoryHash.getModel()).removeRow(i);
+                for (int i = directoryHash.getModel().getRowCount() - 1; i >= 0; i--) {
+                    ((DefaultTableModel) directoryHash.getModel()).removeRow(i);
                 }
                 directoryHash.setEnabled(false);
                 directoryHashControl.setText("Cancel");
                 directoryHashCopy.setEnabled(false);
                 directoryBox.setEnabled(false);
                 directoryHashBox.setEnabled(false);
-                setRecursiveHashRunning(true);
-                new Thread(new DirectoryHasher(this,
+
+                directoryHasher = new DirectoryHasher(this,
                         Objects.requireNonNull(directoryHashBox.getSelectedItem()).toString(),
-                        Objects.requireNonNull(directoryBox.getSelectedItem()).toString()))
-                        .start();
+                        Objects.requireNonNull(directoryBox.getSelectedItem()).toString());
+                directoryHasher.execute();
+
             } else { // we're stopping
-                setRecursiveHashRunning(false);
+                if (directoryHasher != null) {
+                    directoryHasher.cancel(true);
+                }
             }
         });
 
@@ -437,6 +467,10 @@ public class MainWindow extends JFrame {
             Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
             clipboard.setContents(stringSelection, null);
         });
+
+        directoryHashCopy.setToolTipText("Click here to copy your hashes to the clipboard in Excel’s CSV format");
+        directoryHash.setToolTipText("Filenames and hashes are displayed here");
+        directoryProgressBar.setToolTipText("Shows the progress of the current file being hashed");
 
         return directoryTab;
     }
@@ -698,6 +732,8 @@ public class MainWindow extends JFrame {
                     SwingUtilities.invokeLater(() -> fileBox.setPopupVisible(false));
 
                     var fileChooser = new SystemFileChooser();
+                    fileChooser.setMultiSelectionEnabled(false);
+                    fileChooser.setFileSelectionMode(SystemFileChooser.FILES_ONLY);
                     int result = fileChooser.showOpenDialog(_this);
 
                     if (result == SystemFileChooser.APPROVE_OPTION) {
@@ -790,7 +826,6 @@ public class MainWindow extends JFrame {
         directoryHashBox.setSelectedIndex(0);
         fileHashCopy.setEnabled(false);
         directoryHashCopy.setEnabled(false);
-        fileHash.setText("");
         var dtm = (DefaultTableModel) directoryHash.getModel();
         dtm.setRowCount(0);
     }
