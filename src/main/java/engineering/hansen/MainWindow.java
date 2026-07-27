@@ -610,7 +610,7 @@ public class MainWindow extends JFrame {
     void showAbout() {
         JOptionPane.showMessageDialog(this,
                 """
-                        QuickerHash 1.1 is a simple, effective tool for computing hashes.
+                        QuickerHash 1.2 is a simple, effective tool for computing hashes.
                         
                         Copyright ©️ 2026, Robert J. Hansen <rob@hansen.engineering>.
                         
