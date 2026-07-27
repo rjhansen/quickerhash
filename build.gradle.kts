@@ -202,7 +202,7 @@ when {
                 installerOptions = listOf(
                     "--vendor", "Robert Hansen",
                     "--app-version", "$version",
-                    "--linux-package-name", "QuickerHash",
+                    "--linux-package-name", "quickerhash",
                     "--linux-menu-group", "Utility",
                     "--linux-shortcut",
                     "--linux-rpm-license-type", "Apache-2.0",
