@@ -29,6 +29,8 @@ public class QuickerHash {
             } catch (Exception ex) {
                 System.err.println("Failed to initialize LaF");
             }
+            System.setProperty("awt.useSystemAAFontSettings", "on");
+            System.setProperty("swing.aatext", "true");
             var mw = new MainWindow();
             if (SystemInfo.isMacFullWindowContentSupported)
                 mw.getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);

@@ -32,6 +32,7 @@ import java.util.*;
 import java.util.prefs.Preferences;
 
 public class MainWindow extends JFrame {
+    final Font jbMono9, jbMono12;
     final Preferences prefs = Preferences.userRoot().node(this.getClass().getName());
     final JTextArea textArea = new JTextArea();
     final JTextField textHash = new JTextField();
@@ -92,7 +93,7 @@ public class MainWindow extends JFrame {
         var _this = this;
         var directoryBox = new JComboBox<>(model);
         directoryBox.setToolTipText("Click here to choose which directory to hash");
-        directoryBox.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        directoryBox.setFont(jbMono12);
         directoryBox.setEditable(false);
         directoryBox.addPopupMenuListener(new PopupMenuListener() {
             @Override
@@ -179,7 +180,7 @@ public class MainWindow extends JFrame {
         textArea.setLineWrap(false);
         textArea.setEditable(true);
         textArea.setEnabled(true);
-        textArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        textArea.setFont(jbMono12);
         originalColor = textArea.getForeground();
         textArea.setForeground(Color.GRAY);
         textArea.setText("Anything you type here will be hashed.");
@@ -205,11 +206,11 @@ public class MainWindow extends JFrame {
         var directoryTab = new JPanel();
         directoryTab.setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
         directoryTab.setLayout(new BorderLayout());
-        directoryHash.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        directoryHash.setFont(jbMono12);
         directoryProgressBar.setToolTipText("Each file's progress will display here");
         directoryProgressBar.setBorder(BorderFactory.createTitledBorder(directoryProgressBar.getBorder(), "Hash progress"));
         directoryProgressBar.setValue(0);
-        directoryProgressBar.setFont(new Font("Monospaced", Font.PLAIN, 10));
+        directoryProgressBar.setFont(jbMono9);
         directoryProgressBar.setStringPainted(true);
         directoryProgressBar.setString("");
 
@@ -319,7 +320,7 @@ public class MainWindow extends JFrame {
     }
 
     private JPanel makeFileTab() {
-        fileHash.setFont(new Font("Monospaced", Font.BOLD, 12));
+        fileHash.setFont(jbMono12);
         fileHash.setEditable(false);
         fileHash.setText("");
         fileHashCopy.setEnabled(false);
@@ -460,7 +461,7 @@ public class MainWindow extends JFrame {
             var hash = formatHash(textDigest.digest(text.getBytes(StandardCharsets.UTF_8)));
             textHash.setText(hash);
         });
-        textHash.setFont(new Font("Monospaced", Font.BOLD, 12));
+        textHash.setFont(jbMono12);
         textHash.setEditable(false);
         textHash.setText("");
         try {
@@ -567,7 +568,7 @@ public class MainWindow extends JFrame {
         var model = new DefaultComboBoxModel<String>();
         var _this = this;
         var fileBox = new JComboBox<>(model);
-        fileBox.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        fileBox.setFont(jbMono12);
         fileBox.setEditable(false);
         fileBox.addPopupMenuListener(new PopupMenuListener() {
             @Override
@@ -783,6 +784,13 @@ public class MainWindow extends JFrame {
 
     public MainWindow() {
         super("QuickerHash");
+        try {
+            var jbMono = Font.createFont(Font.TRUETYPE_FONT, Objects.requireNonNull(getClass().getResource("/fonts/JetBrainsMono-Regular.ttf")).openStream());
+            jbMono9 = jbMono.deriveFont(9f);
+            jbMono12 = jbMono.deriveFont(12f);
+        } catch (IOException | FontFormatException e) {
+            throw new RuntimeException(e);
+        }
         for (var foo : new String[]{"Common", "Obsolete", "US", "Ukrainian", "Russian", "Chinese", "Exotic"})
             hashCategories.put(foo, new HashSet<>());
         for (var common : new String[]{"MD5", "SHA-1", "SHA-256"}) hashCategories.get("Common").add(common);
