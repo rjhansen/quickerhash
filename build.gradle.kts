@@ -197,7 +197,6 @@ when {
 
                 imageOptions = listOf(
                     "--vendor", "Robert Hansen",
-                    "--license-file", "LICENSE",
                     "--icon", "src/packaging/icons/QuickerHash.png",
                 )
                 installerOptions = listOf(
@@ -206,7 +205,7 @@ when {
                     "--linux-package-name", "QuickerHash",
                     "--linux-menu-group", "Utility",
                     "--linux-shortcut",
-                    "--linux-rpm-license-type", "ASL 2.0",
+                    "--linux-rpm-license-type", "Apache-2.0",
                     "--about-url", "https://github.com/rjhansen/quickerhash"
 //                    "--linux-deb-maintainer", "rob@hansen.engineering" // required for .deb packages
                 )
