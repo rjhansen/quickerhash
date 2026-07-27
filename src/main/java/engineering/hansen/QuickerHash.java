@@ -19,8 +19,10 @@ import java.util.List;
 import java.util.Objects;
 
 public class QuickerHash {
-    static void configureMacOS() {
+    static void configureLaF() {
         try {
+            System.setProperty("awt.useSystemAAFontSettings", "on");
+            System.setProperty("swing.aatext", "true");
             if (SystemInfo.isMacOS) {
                 System.setProperty("apple.laf.useScreenMenuBar", "true");
                 System.setProperty("apple.awt.application.name", "QuickerHash");
@@ -34,18 +36,13 @@ public class QuickerHash {
         }
     }
 
-    private static void setIconImages(List<Image> scaledInstance) {
-    }
-
     static void main() {
         Security.addProvider(new BouncyCastleProvider());
+        configureLaF();
         SwingUtilities.invokeLater(() -> {
-            System.setProperty("awt.useSystemAAFontSettings", "on");
-            System.setProperty("swing.aatext", "true");
             var mw = new MainWindow();
             if (SystemInfo.isMacFullWindowContentSupported)
                 mw.getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);
-
             mw.setLocationRelativeTo(null);
             mw.setSize(800, 600);
             mw.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
