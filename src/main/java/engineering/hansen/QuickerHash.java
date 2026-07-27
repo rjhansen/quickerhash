@@ -21,8 +21,6 @@ import java.util.Objects;
 public class QuickerHash {
     static void configureLaF() {
         try {
-            System.setProperty("awt.useSystemAAFontSettings", "on");
-            System.setProperty("swing.aatext", "true");
             if (SystemInfo.isMacOS) {
                 System.setProperty("apple.laf.useScreenMenuBar", "true");
                 System.setProperty("apple.awt.application.name", "QuickerHash");
