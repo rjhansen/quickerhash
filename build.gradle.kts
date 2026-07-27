@@ -189,6 +189,7 @@ when {
             }
 
             jpackage {
+                icon = file("src/packaging/icons/QuickerHash.png").absolutePath
                 imageName = "QuickerHash"
                 installerName = "QuickerHash"
                 installerType = "rpm"

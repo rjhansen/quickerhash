@@ -10,6 +10,7 @@ import com.formdev.flatlaf.util.SystemFileChooser;
 import org.apache.commons.csv.CSVFormat;
 import org.apache.commons.csv.CSVPrinter;
 
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -788,6 +789,14 @@ public class MainWindow extends JFrame {
             var jbMono = Font.createFont(Font.TRUETYPE_FONT, Objects.requireNonNull(getClass().getResource("/fonts/JetBrainsMono-Regular.ttf")).openStream());
             jbMono9 = jbMono.deriveFont(9f);
             jbMono12 = jbMono.deriveFont(12f);
+            Image original = ImageIO.read(Objects.requireNonNull(QuickerHash.class.getResource("/icons/QuickerHash.png")));
+            setIconImages(java.util.List.of(
+                    original.getScaledInstance(16, 16, Image.SCALE_SMOOTH),
+                    original.getScaledInstance(32, 32, Image.SCALE_SMOOTH),
+                    original.getScaledInstance(48, 48, Image.SCALE_SMOOTH),
+                    original.getScaledInstance(64, 64, Image.SCALE_SMOOTH),
+                    original.getScaledInstance(128, 128, Image.SCALE_SMOOTH),
+                    original.getScaledInstance(256, 256, Image.SCALE_SMOOTH)));
         } catch (IOException | FontFormatException e) {
             throw new RuntimeException(e);
         }
@@ -813,7 +822,6 @@ public class MainWindow extends JFrame {
                 "SKEIN-512-128", "SKEIN-512-160", "SKEIN-512-224", "SKEIN-512-256", "SKEIN-512-384",
                 "SKEIN-512-512", "TIGER", "TUPLEHASH128-256", "TUPLEHASH256-512", "WHIRLPOOL"})
             hashCategories.get("Exotic").add(ex);
-
         setJMenuBar(makeMenuBar());
         populateHashBoxes();
         progressBar.setStringPainted(true);
