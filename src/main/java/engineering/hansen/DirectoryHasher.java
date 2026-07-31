@@ -15,11 +15,11 @@ class DirectoryHasher extends SwingWorker<Void, DirectoryHasher.Update> {
     record Progress(String path, int percent) implements Update {}
     record Completed(String path, String hash) implements Update {}
 
-    private final MainWindow mw;
+    private final DirectoryTab mw;
     private MessageDigest digest;
     private String absPath;
 
-    public DirectoryHasher(MainWindow thingy, String digestName, String startRecursionAt) {
+    public DirectoryHasher(DirectoryTab thingy, String digestName, String startRecursionAt) {
         mw = thingy;
         try {
             digest = MessageDigest.getInstance(digestName);
@@ -65,7 +65,7 @@ class DirectoryHasher extends SwingWorker<Void, DirectoryHasher.Update> {
                     }
 
                     if (!isCancelled()) {
-                        publish(new Completed(p, mw.formatHash(digest.digest())));
+                        publish(new Completed(p, AllTabs.formatHash(digest.digest())));
                     }
                 } catch (IOException e) {
                     // Skip this file but keep walking the rest of the directory,
@@ -82,11 +82,11 @@ class DirectoryHasher extends SwingWorker<Void, DirectoryHasher.Update> {
         for (var update : chunks) {
             switch (update) {
                 case Progress prog -> {
-                    mw.getDirectoryProgressBar().setValue(prog.percent());
-                    mw.getDirectoryProgressBar().setString(prog.path());
+                    mw.getProgressBar().setValue(prog.percent());
+                    mw.getProgressBar().setString(prog.path());
                 }
                 case Completed done -> {
-                    mw.getDirectoryProgressBar().setValue(0);
+                    mw.getProgressBar().setValue(0);
                     mw.getTableModel().addRow(new String[] { done.path(), done.hash() });
                 }
             }

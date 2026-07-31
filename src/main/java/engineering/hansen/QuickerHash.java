@@ -10,13 +10,9 @@ import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.formdev.flatlaf.util.SystemInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import java.awt.*;
-import java.io.IOException;
 import java.security.Security;
-import java.util.List;
-import java.util.Objects;
 
 public class QuickerHash {
     static void configureLaF() {

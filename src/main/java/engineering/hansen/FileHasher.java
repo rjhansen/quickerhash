@@ -8,11 +8,11 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 class FileHasher extends SwingWorker<byte[], Integer> {
-    private final MainWindow mw;
+    private final FileTab mw;
     private MessageDigest digest;
     private String absPath;
 
-    public FileHasher(MainWindow thingy, String digestName, String path) {
+    public FileHasher(FileTab thingy, String digestName, String path) {
         mw = thingy;
         try {
             digest = MessageDigest.getInstance(digestName);
