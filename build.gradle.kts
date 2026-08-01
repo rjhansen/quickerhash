@@ -98,7 +98,7 @@ when {
 
         tasks.register<Exec>("notarizeDmg") {
             group = "distribution"
-            description = "Submits the signed dmg to Apple's notary service and waits for approval"
+            description = "Submits the signed dmg to Apple’s notary service and waits for approval"
             dependsOn("signDmg")
             mustRunAfter("jpackageImage", "jpackage")
 
@@ -108,7 +108,7 @@ when {
             // Submission doesn't modify the file, but it's a network call with side
             // effects on Apple's servers, not a deterministic local build step —
             // exclude it from up-to-date tracking so it always actually runs.
-            doNotTrackState("Submits to Apple's notary service; not a reproducible local build step")
+            doNotTrackState("Submits to Apple’s notary service; not a reproducible local build step")
 
             commandLine(
                 "xcrun", "notarytool", "submit",
