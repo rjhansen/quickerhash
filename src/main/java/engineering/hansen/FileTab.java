@@ -22,6 +22,30 @@ public class FileTab extends JPanel {
     final JComboBox<String> hashBox = new JComboBox<>();
     FileHasher fileHasher;
 
+    FileTab() {
+        setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
+        setLayout(new BorderLayout());
+
+        add(makeTopPanel(), BorderLayout.NORTH);
+        add(makeResultsPanel(), BorderLayout.CENTER);
+
+        wireListeners();
+    }
+
+    private static GridBagConstraints gbc(int x, int y, double weightx, int fill) {
+        return gbc(x, y, weightx, fill, GridBagConstraints.CENTER);
+    }
+
+    private static GridBagConstraints gbc(int x, int y, double weightx, int fill, int anchor) {
+        var c = new GridBagConstraints();
+        c.gridx = x;
+        c.gridy = y;
+        c.weightx = weightx;
+        c.fill = fill;
+        c.anchor = anchor;
+        return c;
+    }
+
     void updateProgressBar(int val) {
         SwingUtilities.invokeLater(() -> {
             progressBar.setValue(val);
@@ -31,7 +55,6 @@ public class FileTab extends JPanel {
 
     private JComboBox<String> makeFileBox() {
         var model = new DefaultComboBoxModel<String>();
-        var _this = this;
         var fileBox = new JComboBox<>(model);
         fileBox.setFont(AllTabs.getMonospaceFont(12));
         fileBox.setEditable(false);
@@ -39,25 +62,7 @@ public class FileTab extends JPanel {
             @Override
             public void popupMenuWillBecomeVisible(PopupMenuEvent e) {
                 SwingUtilities.invokeLater(() -> fileBox.setPopupVisible(false));
-
-                var fileChooser = new SystemFileChooser();
-                fileChooser.setMultiSelectionEnabled(false);
-                fileChooser.setFileSelectionMode(SystemFileChooser.FILES_ONLY);
-                int result = fileChooser.showOpenDialog(_this);
-
-                if (result == SystemFileChooser.APPROVE_OPTION) {
-                    control.setEnabled(true);
-                    model.removeAllElements();
-                    File selectedFile = fileChooser.getSelectedFile();
-                    String path = selectedFile.getAbsolutePath();
-                    if (((DefaultComboBoxModel<String>) fileBox.getModel()).getIndexOf(path) == -1) {
-                        model.addElement(path);
-                    }
-                    fileBox.setSelectedItem(path);
-                } else {
-                    model.removeAllElements();
-                    control.setEnabled(false);
-                }
+                chooseFile(model, fileBox);
             }
 
             @Override
@@ -71,116 +76,108 @@ public class FileTab extends JPanel {
         return fileBox;
     }
 
-    FileTab() {
+    private void chooseFile(DefaultComboBoxModel<String> model, JComboBox<String> fileBox) {
+        var fileChooser = new SystemFileChooser();
+        fileChooser.setMultiSelectionEnabled(false);
+        fileChooser.setFileSelectionMode(SystemFileChooser.FILES_ONLY);
+        int result = fileChooser.showOpenDialog(this);
+
+        if (result == SystemFileChooser.APPROVE_OPTION) {
+            control.setEnabled(true);
+            model.removeAllElements();
+            File selectedFile = fileChooser.getSelectedFile();
+            String path = selectedFile.getAbsolutePath();
+            if (model.getIndexOf(path) == -1) {
+                model.addElement(path);
+            }
+            fileBox.setSelectedItem(path);
+        } else {
+            model.removeAllElements();
+            control.setEnabled(false);
+        }
+    }
+
+    private JPanel makeTopPanel() {
+        var topPanel = new JPanel();
+        topPanel.setLayout(new GridBagLayout());
+        topPanel.add(new JLabel("Hash this file: "), gbc(0, 0, 0.0, GridBagConstraints.NONE));
+        topPanel.add(fileBox, gbc(1, 0, 1.0, GridBagConstraints.HORIZONTAL));
+        topPanel.add(new JLabel(" with "), gbc(2, 0, 0.0, GridBagConstraints.NONE));
+        topPanel.add(hashBox, gbc(3, 0, 0.0, GridBagConstraints.NONE));
+        control.setEnabled(false);
+        topPanel.add(control, gbc(4, 0, 0.0, GridBagConstraints.NONE));
+        return topPanel;
+    }
+
+    private JPanel makeResultsPanel() {
         hash.setFont(AllTabs.getMonospaceFont(12));
         hash.setEditable(false);
         hash.setText("");
-        copy.setEnabled(false);
         hash.setToolTipText("The hash is displayed here grouped in blocks of eight hexadecimal digits");
-        progressBar.setToolTipText("This progress bar shows how much of the file has been read");
         var jsp = new JScrollPane(hash);
         jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
         jsp.setBorder(BorderFactory.createTitledBorder(hash.getBorder(), "Hash value"));
 
-        setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
-        setLayout(new BorderLayout());
-
-        var topPanel = new JPanel();
-        topPanel.setLayout(new GridBagLayout());
-        var label = new JLabel("Hash this file: ");
-        var gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        topPanel.add(label, gbc);
-
-        gbc = new GridBagConstraints();
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        topPanel.add(fileBox, gbc);
-        gbc = new GridBagConstraints();
-        gbc.gridx = 2;
-        gbc.gridy = 0;
-        topPanel.add(new JLabel(" with "), gbc);
-        gbc = new GridBagConstraints();
-        gbc.gridx = 3;
-        gbc.gridy = 0;
-        topPanel.add(hashBox, gbc);
-
-        control.setEnabled(false);
-        gbc = new GridBagConstraints();
-        gbc.gridx = 4;
-        gbc.gridy = 0;
-        topPanel.add(control, gbc);
-
+        progressBar.setToolTipText("This progress bar shows how much of the file has been read");
         progressBar.setStringPainted(true);
         progressBar.setString("Choose a file and algorithm, then click ‘Start’");
+        var progressRow = new JPanel();
+        progressRow.setLayout(new BorderLayout());
+        progressRow.setBorder(BorderFactory.createEmptyBorder(20, 0, 0, 0));
+        progressRow.add(new JLabel("Progress: "), BorderLayout.WEST);
+        progressRow.add(progressBar, BorderLayout.CENTER);
 
-        add(topPanel, BorderLayout.NORTH);
-        var p = new JPanel();
-        p.setLayout(new BorderLayout());
-        var q = new JPanel();
-        q.setLayout(new BorderLayout());
-        q.setBorder(BorderFactory.createEmptyBorder(20, 0, 0, 0));
-        q.add(new JLabel("Progress: "), BorderLayout.WEST);
-        q.add(progressBar, BorderLayout.CENTER);
-        p.add(q, BorderLayout.NORTH);
-        var foo = new JPanel();
-        foo.setLayout(new GridBagLayout());
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.anchor = GridBagConstraints.LINE_START;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        foo.add(jsp, gbc);
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.fill = GridBagConstraints.VERTICAL;
-        gbc.anchor = GridBagConstraints.LINE_END;
         copy.setEnabled(false);
-        foo.add(copy, gbc);
-        p.add(foo, BorderLayout.SOUTH);
-        add(p, BorderLayout.CENTER);
-
-        control.setToolTipText("This button starts (and cancels) hashing");
-        control.addActionListener(_ -> {
-            if (Objects.equals(control.getText(), "Start")) {
-                control.setText("Cancel");
-                hash.setText("Calculating hash...");
-                copy.setEnabled(false);
-                fileBox.setEnabled(false);
-                hashBox.setEnabled(false);
-                updateProgressBar(0);
-
-                fileHasher = new FileHasher(this,
-                        Objects.requireNonNull(hashBox.getSelectedItem()).toString(),
-                        Objects.requireNonNull(fileBox.getSelectedItem()).toString());
-                fileHasher.execute();
-
-            } else { // we're stopping
-                if (fileHasher != null) {
-                    fileHasher.cancel(true);
-                }
-            }
-        });
-
-        copy.addActionListener(_ -> {
-            StringSelection stringSelection = new StringSelection(hash.getText());
-            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-            clipboard.setContents(stringSelection, null);
-        });
         copy.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
+        var hashRow = new JPanel();
+        hashRow.setLayout(new GridBagLayout());
+        hashRow.add(jsp, gbc(0, 0, 1.0, GridBagConstraints.HORIZONTAL, GridBagConstraints.LINE_START));
+        hashRow.add(copy, gbc(1, 0, 0.0, GridBagConstraints.VERTICAL, GridBagConstraints.LINE_END));
 
+        var panel = new JPanel();
+        panel.setLayout(new BorderLayout());
+        panel.add(progressRow, BorderLayout.NORTH);
+        panel.add(hashRow, BorderLayout.SOUTH);
+        return panel;
+    }
+
+    private void wireListeners() {
+        control.setToolTipText("This button starts (and cancels) hashing");
+        control.addActionListener(_ -> startOrCancelHashing());
+        copy.addActionListener(_ -> copyHashToClipboard());
         hashBox.addItemListener(event -> {
             if (event.getStateChange() == ItemEvent.SELECTED) {
                 hash.setText("");
                 copy.setEnabled(false);
             }
         });
+    }
+
+    private void startOrCancelHashing() {
+        if (Objects.equals(control.getText(), "Start")) {
+            control.setText("Cancel");
+            hash.setText("Calculating hash...");
+            copy.setEnabled(false);
+            fileBox.setEnabled(false);
+            hashBox.setEnabled(false);
+            updateProgressBar(0);
+
+            fileHasher = new FileHasher(this,
+                    Objects.requireNonNull(hashBox.getSelectedItem()).toString(),
+                    Objects.requireNonNull(fileBox.getSelectedItem()).toString());
+            fileHasher.execute();
+        } else { // we're stopping
+            if (fileHasher != null) {
+                fileHasher.cancel(true);
+            }
+        }
+    }
+
+    private void copyHashToClipboard() {
+        var stringSelection = new StringSelection(hash.getText());
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(stringSelection, null);
     }
 
     void endFileHashing() {

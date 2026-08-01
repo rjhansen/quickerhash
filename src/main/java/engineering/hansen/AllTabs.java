@@ -2,31 +2,43 @@ package engineering.hansen;
 
 import java.awt.*;
 import java.io.IOException;
-import java.util.HexFormat;
-import java.util.Objects;
 
 public class AllTabs {
-    public static Font jbMono = null;
+    private static Font baseFont;
 
     public static Font getMonospaceFont(float pointSize) {
-        if (jbMono == null) {
-            try {
-                var fontFile = AllTabs.class.getResource("/fonts/JetBrainsMono-Regular.ttf");
-                jbMono = Font.createFont(Font.TRUETYPE_FONT, fontFile.openStream());
-            } catch (IOException | FontFormatException e) {
-                jbMono = new Font(Font.MONOSPACED, Font.PLAIN, 12);
-            }
+        if (baseFont == null) {
+            baseFont = loadBaseFont();
         }
-        return jbMono.deriveFont(pointSize);
+        return baseFont.deriveFont(pointSize);
     }
 
-    public static String formatHash(byte[] bytes) {
-        var hex = HexFormat.of().formatHex(bytes);
-        var withSpaces = new StringBuilder();
-        for (int i = 0; i < hex.length(); i++) {
-            if ((i > 0) && (0 == i % 8)) withSpaces.append(' ');
-            withSpaces.append(hex.charAt(i));
+    private static Font loadBaseFont() {
+        try {
+            var fontFile = AllTabs.class.getResource("/fonts/JetBrainsMono-Regular.ttf");
+            assert fontFile != null;
+            return Font.createFont(Font.TRUETYPE_FONT, fontFile.openStream());
+        } catch (IOException | FontFormatException e) {
+            return new Font(Font.MONOSPACED, Font.PLAIN, 12);
         }
-        return withSpaces.toString();
+    }
+
+    private static final char[] HEX_DIGITS = "0123456789abcdef".toCharArray();
+
+    public static String formatHash(byte[] bytes) {
+        var out = new StringBuilder(bytes.length * 2 + bytes.length / 4);
+        int hexIndex = 0;
+        for (byte b : bytes) {
+            for (int shift = 4; shift >= 0; shift -= 4) {
+                if (hexIndex > 0 && hexIndex % 8 == 0) out.append(' ');
+                out.append(HEX_DIGITS[(b >> shift) & 0xF]);
+                hexIndex++;
+            }
+        }
+        return out.toString();
+    }
+
+    public static int percentComplete(long bytesRead, long totalBytes) {
+        return (int) (100.0 * ((float) bytesRead / (float) totalBytes));
     }
 }

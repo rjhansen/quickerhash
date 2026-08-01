@@ -11,11 +11,16 @@ import com.formdev.flatlaf.util.SystemInfo;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.swing.*;
-import java.awt.*;
 import java.security.Security;
 
 public class QuickerHash {
-    static void configureLaF() {
+    static void main() {
+        Security.addProvider(new BouncyCastleProvider());
+        configureLookAndFeel();
+        SwingUtilities.invokeLater(QuickerHash::createAndShowMainWindow);
+    }
+
+    private static void configureLookAndFeel() {
         try {
             if (SystemInfo.isMacOS) {
                 System.setProperty("apple.laf.useScreenMenuBar", "true");
@@ -30,17 +35,14 @@ public class QuickerHash {
         }
     }
 
-    static void main() {
-        Security.addProvider(new BouncyCastleProvider());
-        configureLaF();
-        SwingUtilities.invokeLater(() -> {
-            var mw = new MainWindow();
-            if (SystemInfo.isMacFullWindowContentSupported)
-                mw.getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);
-            mw.setLocationRelativeTo(null);
-            mw.setSize(800, 600);
-            mw.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            mw.setVisible(true);
-        });
+    private static void createAndShowMainWindow() {
+        var window = new MainWindow();
+        if (SystemInfo.isMacFullWindowContentSupported) {
+            window.getRootPane().putClientProperty("apple.awt.transparentTitleBar", true);
+        }
+        window.setLocationRelativeTo(null);
+        window.setSize(800, 600);
+        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        window.setVisible(true);
     }
 }

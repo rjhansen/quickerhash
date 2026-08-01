@@ -25,114 +25,29 @@ public class TextTab extends JPanel {
     Color originalColor;
 
     public TextTab() {
-        var textEntryRegion = makeTextEntryRegion();
-        textArea.setToolTipText("Enter your text here");
-        hash.setToolTipText("The hash is displayed here grouped in blocks of eight hexadecimal digits");
-        hashBox.setEditable(false);
-        hashBox.addActionListener(_ -> {
-            if (hashBox.getModel().getSize() == 0) {
-                return;
-            }
-            try {
-                digest = MessageDigest.getInstance(Objects.requireNonNull(hashBox.getSelectedItem()).toString());
-            } catch (NoSuchAlgorithmException e) {
-                JOptionPane.showMessageDialog(this,
-                        "An internal error occurred.\n\nPlease file a bug.",
-                        "Internal error",
-                        JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            String text = (textArea.getForeground() == Color.GRAY) ? "" : textArea.getText();
-            var hash = AllTabs.formatHash(digest.digest(text.getBytes(StandardCharsets.UTF_8)));
-            this.hash.setText(hash);
-        });
-        hash.setFont(AllTabs.getMonospaceFont(12));
-        hash.setEditable(false);
-        hash.setText("");
-
         setLayout(new GridBagLayout());
         setBorder(BorderFactory.createEmptyBorder(12, 12, 12, 12));
 
-        var gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weightx = 1.0;
-        gbc.weighty = 1.0;
-        add(textEntryRegion, gbc);
+        add(makeTextEntryRegion(), gbc(0, 0, 1.0, 1.0, GridBagConstraints.BOTH));
+        add(makeAlgorithmPanel(), gbc(0, 1, 0.0, 0.0, GridBagConstraints.BOTH));
+        add(makeHashValuePanel(), gbc(0, 2, 0.0, 0.0, GridBagConstraints.BOTH));
 
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 1;
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weightx = 0.0;
-        gbc.weighty = 0.0;
-        var mid = new JPanel();
-        mid.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
-        mid.setLayout(new FlowLayout());
-        mid.add(new JLabel("Hash algorithm: "));
-        mid.add(hashBox);
-        add(mid, gbc);
+        wireListeners();
+    }
 
-        var jsp = new JScrollPane(this.hash);
-        jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-        jsp.setBorder(BorderFactory.createTitledBorder(this.hash.getBorder(), "Hash value"));
+    private static GridBagConstraints gbc(int x, int y, double weightx, double weighty, int fill) {
+        return gbc(x, y, weightx, weighty, fill, GridBagConstraints.CENTER);
+    }
 
-        var foo = new JPanel();
-        foo.setLayout(new GridBagLayout());
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.weightx = 1.0;
-        gbc.anchor = GridBagConstraints.LINE_START;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        foo.add(jsp, gbc);
-        gbc = new GridBagConstraints();
-        gbc.gridx = 1;
-        gbc.gridy = 0;
-        gbc.fill = GridBagConstraints.VERTICAL;
-        gbc.anchor = GridBagConstraints.LINE_END;
-        copyBtn.setEnabled(true);
-        foo.add(copyBtn, gbc);
-
-        gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 2;
-        gbc.fill = GridBagConstraints.BOTH;
-        gbc.weightx = 0.0;
-        gbc.weighty = 0.0;
-        add(foo, gbc);
-
-        textArea.getDocument().addDocumentListener(new DocumentListener() {
-            @Override
-            public void insertUpdate(DocumentEvent e) {
-                onChange();
-            }
-
-            @Override
-            public void removeUpdate(DocumentEvent e) {
-                onChange();
-            }
-
-            @Override
-            public void changedUpdate(DocumentEvent e) {
-                onChange();
-            }
-
-            private void onChange() {
-                digest.reset();
-                var hash = digest.digest(textArea.getText().getBytes(StandardCharsets.UTF_8));
-                TextTab.this.hash.setText(AllTabs.formatHash((hash)));
-            }
-        });
-
-        copyBtn.addActionListener(_ -> {
-            StringSelection stringSelection = new StringSelection(this.hash.getText());
-            Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-            clipboard.setContents(stringSelection, null);
-        });
-        copyBtn.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
+    private static GridBagConstraints gbc(int x, int y, double weightx, double weighty, int fill, int anchor) {
+        var c = new GridBagConstraints();
+        c.gridx = x;
+        c.gridy = y;
+        c.weightx = weightx;
+        c.weighty = weighty;
+        c.fill = fill;
+        c.anchor = anchor;
+        return c;
     }
 
     private JScrollPane makeTextEntryRegion() {
@@ -140,6 +55,7 @@ public class TextTab extends JPanel {
         textArea.setEditable(true);
         textArea.setEnabled(true);
         textArea.setFont(AllTabs.getMonospaceFont(12));
+        textArea.setToolTipText("Enter your text here");
         originalColor = textArea.getForeground();
         textArea.setForeground(Color.GRAY);
         textArea.setText("Anything you type here will be hashed.");
@@ -154,10 +70,91 @@ public class TextTab extends JPanel {
             }
         });
 
-        var foo = new JScrollPane(textArea);
-        foo.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
-        foo.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-        foo.setBorder(BorderFactory.createTitledBorder(foo.getBorder(), "Enter text here"));
-        return foo;
+        var scrollPane = new JScrollPane(textArea);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_ALWAYS);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+        scrollPane.setBorder(BorderFactory.createTitledBorder(scrollPane.getBorder(), "Enter text here"));
+        return scrollPane;
+    }
+
+    private JPanel makeAlgorithmPanel() {
+        hashBox.setEditable(false);
+
+        var panel = new JPanel();
+        panel.setBorder(BorderFactory.createEmptyBorder(5, 0, 5, 0));
+        panel.setLayout(new FlowLayout());
+        panel.add(new JLabel("Hash algorithm: "));
+        panel.add(hashBox);
+        return panel;
+    }
+
+    private JPanel makeHashValuePanel() {
+        hash.setFont(AllTabs.getMonospaceFont(12));
+        hash.setEditable(false);
+        hash.setText("");
+        hash.setToolTipText("The hash is displayed here grouped in blocks of eight hexadecimal digits");
+
+        var scrollPane = new JScrollPane(hash);
+        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
+        scrollPane.setBorder(BorderFactory.createTitledBorder(hash.getBorder(), "Hash value"));
+
+        copyBtn.setEnabled(true);
+        copyBtn.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
+
+        var panel = new JPanel();
+        panel.setLayout(new GridBagLayout());
+        panel.add(scrollPane, gbc(0, 0, 1.0, 0.0, GridBagConstraints.HORIZONTAL, GridBagConstraints.LINE_START));
+        panel.add(copyBtn, gbc(1, 0, 0.0, 0.0, GridBagConstraints.VERTICAL, GridBagConstraints.LINE_END));
+        return panel;
+    }
+
+    private void wireListeners() {
+        hashBox.addActionListener(_ -> onAlgorithmChanged());
+        textArea.getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                onTextChanged();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                onTextChanged();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                onTextChanged();
+            }
+        });
+        copyBtn.addActionListener(_ -> copyHashToClipboard());
+    }
+
+    private void onAlgorithmChanged() {
+        if (hashBox.getModel().getSize() == 0) {
+            return;
+        }
+        try {
+            digest = MessageDigest.getInstance(Objects.requireNonNull(hashBox.getSelectedItem()).toString());
+        } catch (NoSuchAlgorithmException e) {
+            JOptionPane.showMessageDialog(this,
+                    "An internal error occurred.\n\nPlease file a bug.",
+                    "Internal error",
+                    JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        String text = textEntered ? textArea.getText() : "";
+        hash.setText(AllTabs.formatHash(digest.digest(text.getBytes(StandardCharsets.UTF_8))));
+    }
+
+    private void onTextChanged() {
+        digest.reset();
+        hash.setText(AllTabs.formatHash(digest.digest(textArea.getText().getBytes(StandardCharsets.UTF_8))));
+    }
+
+    private void copyHashToClipboard() {
+        var stringSelection = new StringSelection(hash.getText());
+        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+        clipboard.setContents(stringSelection, null);
     }
 }

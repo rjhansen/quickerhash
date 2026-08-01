@@ -6,23 +6,22 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.List;
 
 class FileHasher extends SwingWorker<byte[], Integer> {
-    private final FileTab mw;
+    private static final int BUFFER_SIZE = 1048576;
+
+    private final FileTab owner;
     private MessageDigest digest;
     private String absPath;
 
-    public FileHasher(FileTab thingy, String digestName, String path) {
-        mw = thingy;
+    public FileHasher(FileTab owner, String digestName, String path) {
+        this.owner = owner;
         try {
             digest = MessageDigest.getInstance(digestName);
             absPath = path;
         } catch (NoSuchAlgorithmException e) {
-            SwingUtilities.invokeLater(() ->
-                    JOptionPane.showMessageDialog(mw,
-                            "An error occurred while creating the hash engine:\n\n" + e.getMessage(),
-                            "I’m sorry…",
-                            JOptionPane.ERROR_MESSAGE));
+            reportError("An error occurred while creating the hash engine:\n\n" + e.getMessage());
             digest = null;
             absPath = null;
         }
@@ -31,49 +30,52 @@ class FileHasher extends SwingWorker<byte[], Integer> {
     @Override
     protected byte[] doInBackground() throws Exception {
         if (digest == null || absPath == null) return null;
-
-        digest.reset();
-        long totalBytesRead = 0;
-
-        try (var fh = new FileInputStream(absPath)) {
-            var filesize = Files.size(Paths.get(absPath));
-            var bytes = fh.readNBytes(1048576);
-
-            while (!isCancelled() && bytes.length > 0) {
-                digest.update(bytes);
-                totalBytesRead += bytes.length;
-                int fracDone = (int) (100.0 * ((float) totalBytesRead / (float) filesize));
-                publish(fracDone);
-                bytes = fh.readNBytes(1048576);
-            }
-        }
-
+        hashFile();
         return isCancelled() ? null : digest.digest();
     }
 
+    private void hashFile() throws Exception {
+        digest.reset();
+        long totalBytesRead = 0;
+        var buffer = new byte[BUFFER_SIZE];
+
+        try (var fh = new FileInputStream(absPath)) {
+            var filesize = Files.size(Paths.get(absPath));
+            int bytesRead;
+
+            while (!isCancelled() && (bytesRead = fh.read(buffer)) > 0) {
+                digest.update(buffer, 0, bytesRead);
+                totalBytesRead += bytesRead;
+                publish(AllTabs.percentComplete(totalBytesRead, filesize));
+            }
+        }
+    }
+
     @Override
-    protected void process(java.util.List<Integer> chunks) {
-        mw.updateProgressBar(chunks.getLast());
+    protected void process(List<Integer> chunks) {
+        owner.updateProgressBar(chunks.getLast());
     }
 
     @Override
     protected void done() {
-        mw.endFileHashing();
+        owner.endFileHashing();
 
         if (isCancelled()) {
-            mw.setFileHash(false, null);
+            owner.setFileHash(false, null);
             return;
         }
 
         try {
             byte[] result = get();
-            mw.setFileHash(result != null, result);
+            owner.setFileHash(result != null, result);
         } catch (Exception e) {
             Throwable cause = e.getCause() != null ? e.getCause() : e;
-            JOptionPane.showMessageDialog(mw,
-                    "An error occurred while reading the file:\n\n" + cause.getMessage(),
-                    "I’m sorry…",
-                    JOptionPane.ERROR_MESSAGE);
+            reportError("An error occurred while reading the file:\n\n" + cause.getMessage());
         }
+    }
+
+    private void reportError(String message) {
+        SwingUtilities.invokeLater(() ->
+                JOptionPane.showMessageDialog(owner, message, "I’m sorry…", JOptionPane.ERROR_MESSAGE));
     }
 }
