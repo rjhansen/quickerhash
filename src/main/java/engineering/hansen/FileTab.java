@@ -7,19 +7,16 @@ import javax.swing.*;
 import javax.swing.event.PopupMenuEvent;
 import javax.swing.event.PopupMenuListener;
 import java.awt.*;
-import java.awt.datatransfer.Clipboard;
-import java.awt.datatransfer.StringSelection;
 import java.awt.event.ItemEvent;
 import java.io.File;
 import java.util.Objects;
 
 public class FileTab extends JPanel {
     private final JButton control = new JButton("Start");
-    private final JTextField hash = new JTextField();
-    final JButton copy = new JButton("Copy");
     private final JProgressBar progressBar = new JProgressBar(JProgressBar.HORIZONTAL, 0, 100);
     private final JComboBox<String> fileBox = makeFileBox();
     final JComboBox<String> hashBox = new JComboBox<>();
+    final HashComparator hc = new HashComparator();
     FileHasher fileHasher;
 
     FileTab() {
@@ -110,15 +107,6 @@ public class FileTab extends JPanel {
     }
 
     private JPanel makeResultsPanel() {
-        hash.setFont(AllTabs.getMonospaceFont(12));
-        hash.setEditable(false);
-        hash.setText("");
-        hash.setToolTipText("The hash is displayed here grouped in blocks of eight hexadecimal digits");
-        var jsp = new JScrollPane(hash);
-        jsp.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        jsp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-        jsp.setBorder(BorderFactory.createTitledBorder(hash.getBorder(), "Hash value"));
-
         progressBar.setToolTipText("This progress bar shows how much of the file has been read");
         progressBar.setStringPainted(true);
         progressBar.setString("Choose a file and algorithm, then click ‘Start’");
@@ -128,28 +116,21 @@ public class FileTab extends JPanel {
         progressRow.add(new JLabel("Progress: "), BorderLayout.WEST);
         progressRow.add(progressBar, BorderLayout.CENTER);
 
-        copy.setEnabled(false);
-        copy.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
-        var hashRow = new JPanel();
-        hashRow.setLayout(new GridBagLayout());
-        hashRow.add(jsp, gbc(0, 0, 1.0, GridBagConstraints.HORIZONTAL, GridBagConstraints.LINE_START));
-        hashRow.add(copy, gbc(1, 0, 0.0, GridBagConstraints.VERTICAL, GridBagConstraints.LINE_END));
-
         var panel = new JPanel();
         panel.setLayout(new BorderLayout());
         panel.add(progressRow, BorderLayout.NORTH);
-        panel.add(hashRow, BorderLayout.SOUTH);
+        panel.add(hc, BorderLayout.SOUTH);
         return panel;
     }
 
     private void wireListeners() {
         control.setToolTipText("This button starts (and cancels) hashing");
         control.addActionListener(_ -> startOrCancelHashing());
-        copy.addActionListener(_ -> copyHashToClipboard());
+
         hashBox.addItemListener(event -> {
             if (event.getStateChange() == ItemEvent.SELECTED) {
-                hash.setText("");
-                copy.setEnabled(false);
+                hc.getData().setText("");
+                hc.getCopy().setEnabled(false);
             }
         });
     }
@@ -157,8 +138,8 @@ public class FileTab extends JPanel {
     private void startOrCancelHashing() {
         if (Objects.equals(control.getText(), "Start")) {
             control.setText("Cancel");
-            hash.setText("Calculating hash...");
-            copy.setEnabled(false);
+            hc.getData().setText("Calculating hash...");
+            hc.getCopy().setEnabled(false);
             fileBox.setEnabled(false);
             hashBox.setEnabled(false);
             updateProgressBar(0);
@@ -174,12 +155,6 @@ public class FileTab extends JPanel {
         }
     }
 
-    private void copyHashToClipboard() {
-        var stringSelection = new StringSelection(hash.getText());
-        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        clipboard.setContents(stringSelection, null);
-    }
-
     void endFileHashing() {
         updateProgressBar(0);
         hashBox.setEnabled(true);
@@ -191,11 +166,11 @@ public class FileTab extends JPanel {
 
     void setFileHash(boolean complete, byte[] contents) {
         if (complete) {
-            hash.setText(AllTabs.formatHash(contents));
-            copy.setEnabled(true);
+            hc.getData().setText(AllTabs.formatHash(contents));
+            hc.getCopy().setEnabled(true);
         } else {
-            hash.setText("Operation cancelled.");
-            copy.setEnabled(false);
+            hc.getData().setText("Operation cancelled.");
+            hc.getCopy().setEnabled(false);
         }
     }
 }

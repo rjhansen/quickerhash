@@ -14,15 +14,15 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Objects;
+import javax.swing.text.AbstractDocument;
 
 public class TextTab extends JPanel {
-    final JTextField hash = new JTextField();
-    final JButton copyBtn = new JButton("Copy");
     final JTextArea textArea = new JTextArea();
     final JComboBox<String> hashBox = new JComboBox<>();
     MessageDigest digest = null;
     boolean textEntered = false;
     Color originalColor;
+    final HashComparator hc = new HashComparator();
 
     public TextTab() {
         setLayout(new GridBagLayout());
@@ -30,7 +30,7 @@ public class TextTab extends JPanel {
 
         add(makeTextEntryRegion(), gbc(0, 0, 1.0, 1.0, GridBagConstraints.BOTH));
         add(makeAlgorithmPanel(), gbc(0, 1, 0.0, 0.0, GridBagConstraints.BOTH));
-        add(makeHashValuePanel(), gbc(0, 2, 0.0, 0.0, GridBagConstraints.BOTH));
+        add(hc, gbc(0, 2, 0.0, 0.0, GridBagConstraints.BOTH));
 
         wireListeners();
     }
@@ -88,27 +88,6 @@ public class TextTab extends JPanel {
         return panel;
     }
 
-    private JPanel makeHashValuePanel() {
-        hash.setFont(AllTabs.getMonospaceFont(12));
-        hash.setEditable(false);
-        hash.setText("");
-        hash.setToolTipText("The hash is displayed here grouped in blocks of eight hexadecimal digits");
-
-        var scrollPane = new JScrollPane(hash);
-        scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
-        scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_ALWAYS);
-        scrollPane.setBorder(BorderFactory.createTitledBorder(hash.getBorder(), "Hash value"));
-
-        copyBtn.setEnabled(true);
-        copyBtn.setIcon(new FlatSVGIcon(getClass().getResource("/icons/copy-clipboard.svg")).derive(16, 16));
-
-        var panel = new JPanel();
-        panel.setLayout(new GridBagLayout());
-        panel.add(scrollPane, gbc(0, 0, 1.0, 0.0, GridBagConstraints.HORIZONTAL, GridBagConstraints.LINE_START));
-        panel.add(copyBtn, gbc(1, 0, 0.0, 0.0, GridBagConstraints.VERTICAL, GridBagConstraints.LINE_END));
-        return panel;
-    }
-
     private void wireListeners() {
         hashBox.addActionListener(_ -> onAlgorithmChanged());
         textArea.getDocument().addDocumentListener(new DocumentListener() {
@@ -127,7 +106,6 @@ public class TextTab extends JPanel {
                 onTextChanged();
             }
         });
-        copyBtn.addActionListener(_ -> copyHashToClipboard());
     }
 
     private void onAlgorithmChanged() {
@@ -144,17 +122,12 @@ public class TextTab extends JPanel {
             return;
         }
         String text = textEntered ? textArea.getText() : "";
-        hash.setText(AllTabs.formatHash(digest.digest(text.getBytes(StandardCharsets.UTF_8))));
+        hc.getData().setText(AllTabs.formatHash(digest.digest(text.getBytes(StandardCharsets.UTF_8))));
     }
 
     private void onTextChanged() {
         digest.reset();
-        hash.setText(AllTabs.formatHash(digest.digest(textArea.getText().getBytes(StandardCharsets.UTF_8))));
+        hc.getData().setText(AllTabs.formatHash(digest.digest(textArea.getText().getBytes(StandardCharsets.UTF_8))));
     }
 
-    private void copyHashToClipboard() {
-        var stringSelection = new StringSelection(hash.getText());
-        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        clipboard.setContents(stringSelection, null);
-    }
 }

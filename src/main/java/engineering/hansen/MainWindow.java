@@ -60,7 +60,7 @@ public class MainWindow extends JFrame {
         var enabled = computeEnabledHashes();
         resetHashBoxes(enabled.stream().sorted().toList());
         refreshTextTabHash();
-        fileTab.copy.setEnabled(false);
+        fileTab.hc.getCopy().setEnabled(false);
         directoryTab.copyBtn.setEnabled(false);
         directoryTab.getTableModel().setRowCount(0);
     }
@@ -107,7 +107,7 @@ public class MainWindow extends JFrame {
         var hash = textTab.digest.digest(textTab.textEntered ?
                 textTab.textArea.getText().getBytes(StandardCharsets.UTF_8) :
                 new byte[]{});
-        textTab.hash.setText(AllTabs.formatHash(hash));
+        textTab.hc.getData().setText(AllTabs.formatHash(hash));
     }
 
     JMenuBar makeMenuBar() {
